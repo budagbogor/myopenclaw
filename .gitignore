@@ -1,0 +1,21 @@
+# Build directories
+build/
+bin/
+obj/
+out/
+
+# IDE files
+.vscode/
+.vs/
+*.sln
+*.vcxproj
+*.user
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.log

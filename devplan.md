@@ -44,10 +44,11 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Menambahkan polling Telegram untuk menerima pesan dan menyimpannya ke inbox (in-memory).
 - [x] Menambahkan endpoint inbox minimal: `/inbox/messages`.
 - [x] Menambahkan endpoint status Telegram: `/connectors/telegram/status`.
+- [x] Menambahkan UI minimal (static web) untuk tasks/approvals/inbox/logs/tools.
 
 ### **Next Steps:**
 1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).
 2. Mengaktifkan bot Telegram real: set `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_POLLING=true`.
 3. Menambahkan allowlist chatId (opsional) untuk keamanan: `TELEGRAM_ALLOWLIST_CHAT_IDS`.
-4. Menyusun UI minimal (dashboard tasks/approvals/logs + inbox) untuk mengontrol agent.
-5. Memulai email connector (IMAP/provider API) untuk workflow inbox.
+4. Memulai email connector (IMAP/provider API) untuk workflow inbox.
+5. Menambahkan klasifikasi email dan draft reply workflow.

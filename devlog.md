@@ -15,7 +15,7 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 - [x] Approval gate: langkah sensitif wajib persetujuan.
 - [x] Audit log: catat setiap tool call (input/output/error) dan metadata.
 - [x] Konfigurasi & secret management (tanpa hardcode credential).
-- [ ] UI minimal: daftar task, detail step, halaman approval.
+- [x] UI minimal: daftar task, detail step, halaman approval.
 
 ## **Fase 2: Inbox & Messaging (MVP+)**
 **Tujuan:** Agent bisa membantu mengelola komunikasi harian dengan draft reply dan pengiriman terkontrol.

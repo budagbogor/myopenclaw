@@ -2,6 +2,8 @@ import express from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
 import { z } from 'zod';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Tools } from './tools/index.js';
 import { Storage } from './storage/memory.js';
 import { enqueueTask, approveAndContinue } from './agent.js';
@@ -12,6 +14,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, version: '0.1.0' });

@@ -61,9 +61,12 @@ export interface Reminder {
   };
 }
 
+export type ToolEffect = 'read' | 'write';
+
 export interface Tool {
   name: string;
   description: string;
+  effect: ToolEffect;
   approvalRequired?: (params: Record<string, unknown>) => boolean;
   run: (params: Record<string, unknown>) => Promise<unknown>;
 }

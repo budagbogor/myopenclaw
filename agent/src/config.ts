@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 const EnvSchema = z.object({
   PORT: z.coerce.number().optional(),
+  MYCLAW_MODE: z.string().optional(),
+  MYCLAW_ALLOWED_TOOLS: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(10).optional(),
   TELEGRAM_POLLING: z
     .string()
@@ -49,6 +51,8 @@ function parseAllowlist(csv?: string): Set<string> | undefined {
 
 export const Config = {
   port: env.PORT ?? 3100,
+  mode: (env.MYCLAW_MODE ?? 'safe') as 'safe' | 'read_only',
+  allowedTools: parseAllowlist(env.MYCLAW_ALLOWED_TOOLS),
   telegram: {
     botToken: env.TELEGRAM_BOT_TOKEN,
     pollingEnabled: env.TELEGRAM_POLLING ?? false,

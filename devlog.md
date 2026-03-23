@@ -6,7 +6,7 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 **Tujuan:** Menetapkan ulang arah produk dari prototipe game engine menjadi agentic AI yang aman dan bisa diaudit.
 - [ ] Finalisasi scope MVP (channel prioritas, batasan aksi, approval).
 - [ ] Menetapkan kebijakan data (retention, redaction, export/delete).
-- [ ] Menetapkan kebijakan keamanan (allowlist tools, read-only default).
+- [x] Menetapkan kebijakan keamanan (allowlist tools, read-only default).
 
 ## **Fase 1: Foundation (MVP)**
 **Tujuan:** Membangun fondasi agent runtime, policy, dan audit sehingga agent bisa bekerja dengan aman.

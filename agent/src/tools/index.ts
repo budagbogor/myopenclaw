@@ -8,6 +8,7 @@ export const Tools: Record<string, Tool> = {
   webSearch: {
     name: 'webSearch',
     description: 'Cari informasi dari web (mock).',
+    effect: 'read',
     run: async (params) => {
       await wait(200);
       const q = String(params.query ?? '');
@@ -17,6 +18,7 @@ export const Tools: Record<string, Tool> = {
   emailDraft: {
     name: 'emailDraft',
     description: 'Buat draft balasan email dari konteks percakapan.',
+    effect: 'read',
     run: async (params) => {
       await wait(150);
       const to = String(params.to ?? 'unknown@example.com');
@@ -28,6 +30,7 @@ export const Tools: Record<string, Tool> = {
   sendTelegram: {
     name: 'sendTelegram',
     description: 'Kirim pesan Telegram (butuh approval).',
+    effect: 'write',
     approvalRequired: () => true,
     run: async (params) => {
       const chatId = String(params.chatId ?? 'unknown');
@@ -39,6 +42,7 @@ export const Tools: Record<string, Tool> = {
   sendEmail: {
     name: 'sendEmail',
     description: 'Kirim email via SMTP (butuh approval).',
+    effect: 'write',
     approvalRequired: () => true,
     run: async (params) => {
       const to = String(params.to ?? '');

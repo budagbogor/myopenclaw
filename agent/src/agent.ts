@@ -1,7 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Storage } from './storage/memory.js';
 import { Tools } from './tools/index.js';
+import { Config } from './config.js';
 import type { Task, ToolCall } from './types.js';
+
+function isToolAllowed(toolName: string): boolean {
+  const allow = Config.allowedTools;
+  if (!allow) return true;
+  return allow.has(toolName);
+}
 
 export async function enqueueTask(title: string, steps: ToolCall[]): Promise<Task> {
   const task: Task = {
@@ -30,8 +37,43 @@ export async function runTask(taskId: string): Promise<void> {
     const idx = task.currentStep;
     const step = task.steps[idx];
     const tool = Tools[step.tool];
+    if (!isToolAllowed(step.tool)) {
+      const error = `Tool blocked by policy: ${step.tool}`;
+      const entry = {
+        time: new Date().toISOString(),
+        taskId: task.id,
+        stepIndex: idx,
+        tool: step.tool,
+        input: step.params,
+        error,
+        status: 'error',
+      } as const;
+      task.logs.push(entry);
+      Storage.addLog(entry);
+      task.status = 'failed';
+      Storage.updateTask(task);
+      return;
+    }
     if (!tool) {
       const error = `Tool not found: ${step.tool}`;
+      const entry = {
+        time: new Date().toISOString(),
+        taskId: task.id,
+        stepIndex: idx,
+        tool: step.tool,
+        input: step.params,
+        error,
+        status: 'error',
+      } as const;
+      task.logs.push(entry);
+      Storage.addLog(entry);
+      task.status = 'failed';
+      Storage.updateTask(task);
+      return;
+    }
+
+    if (Config.mode === 'read_only' && tool.effect === 'write') {
+      const error = `Tool blocked (read_only mode): ${step.tool}`;
       const entry = {
         time: new Date().toISOString(),
         taskId: task.id,
@@ -110,7 +152,40 @@ export async function approveAndContinue(taskId: string): Promise<Task | undefin
   const idx = task.currentStep;
   const step = task.steps[idx];
   const tool = Tools[step.tool];
+  if (!isToolAllowed(step.tool)) {
+    const entry = {
+      time: new Date().toISOString(),
+      taskId: task.id,
+      stepIndex: idx,
+      tool: step.tool,
+      input: step.params,
+      error: `Tool blocked by policy: ${step.tool}`,
+      status: 'error',
+    } as const;
+    task.logs.push(entry);
+    Storage.addLog(entry);
+    task.status = 'failed';
+    Storage.updateTask(task);
+    return task;
+  }
   if (!tool) {
+    task.status = 'failed';
+    Storage.updateTask(task);
+    return task;
+  }
+
+  if (Config.mode === 'read_only' && tool.effect === 'write') {
+    const entry = {
+      time: new Date().toISOString(),
+      taskId: task.id,
+      stepIndex: idx,
+      tool: step.tool,
+      input: step.params,
+      error: `Tool blocked (read_only mode): ${step.tool}`,
+      status: 'error',
+    } as const;
+    task.logs.push(entry);
+    Storage.addLog(entry);
     task.status = 'failed';
     Storage.updateTask(task);
     return task;

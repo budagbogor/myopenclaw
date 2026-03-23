@@ -31,9 +31,11 @@ app.get('/tools', (_req, res) => {
   const tools = Object.values(Tools).map((t) => ({
     name: t.name,
     description: t.description,
+    effect: t.effect,
     requiresApproval: !!t.approvalRequired,
+    allowed: Config.allowedTools ? Config.allowedTools.has(t.name) : true,
   }));
-  res.json({ tools });
+  res.json({ mode: Config.mode, tools });
 });
 
 const TaskSchema = z.object({

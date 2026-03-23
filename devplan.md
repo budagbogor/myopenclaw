@@ -56,6 +56,7 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Upgrade dependency mail sender untuk menutup vulnerability (nodemailer v8).
 - [x] Menambahkan edit draft sebelum approval (PATCH step current) + UI prompt edit untuk step send.
 - [x] Menambahkan reminders + follow-up: endpoint `/reminders` dan tombol follow-up dari inbox.
+- [x] Menambahkan policy mode `MYCLAW_MODE` (safe/read_only) dan allowlist `MYCLAW_ALLOWED_TOOLS`.
 
 ### **Next Steps:**
 1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).

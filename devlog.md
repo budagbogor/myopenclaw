@@ -1,43 +1,45 @@
-# Development Log: MyClaw Engine
+# Development Log: MyClaw (Agentic AI)
 
-Dokumen ini merinci fase-fase pengembangan MyClaw Engine, sebuah engine platformer 2D yang terinspirasi oleh Captain Claw.
+Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk membantu pekerjaan rutin (komunikasi, email, database, web, coding, presentasi).
 
-## **Fase 1: Fondasi (MVP)**
-**Tujuan:** Membangun kerangka dasar aplikasi yang dapat berjalan dan menampilkan grafik sederhana.
-- [ ] Inisialisasi struktur proyek (`src`, `include`, `assets`).
-- [ ] Konfigurasi `CMakeLists.txt` dengan dependensi SDL2.
-- [ ] Pembuatan jendela utama (Window) menggunakan SDL2.
-- [ ] Implementasi Game Loop dasar (Update & Render).
-- [ ] Rendering sprite statis ke layar.
+## **Fase 0: Pivot & Re-Alignment**
+**Tujuan:** Menetapkan ulang arah produk dari prototipe game engine menjadi agentic AI yang aman dan bisa diaudit.
+- [ ] Finalisasi scope MVP (channel prioritas, batasan aksi, approval).
+- [ ] Menetapkan kebijakan data (retention, redaction, export/delete).
+- [ ] Menetapkan kebijakan keamanan (allowlist tools, read-only default).
 
-## **Fase 2: Mekanik & Fisika**
-**Tujuan:** Karakter dapat bergerak dan berinteraksi dengan lingkungan dasar.
-- [ ] Sistem input keyboard dan gamepad.
-- [ ] Implementasi sistem koordinat dan pergerakan karakter (Horizontal).
-- [ ] Integrasi gravitasi dan mekanik lompatan.
-- [ ] Sistem kolisi tile-based sederhana (AABB collision).
-- [ ] Penanganan lereng (slopes) dan platform bergerak.
+## **Fase 1: Foundation (MVP)**
+**Tujuan:** Membangun fondasi agent runtime, policy, dan audit sehingga agent bisa bekerja dengan aman.
+- [x] Agent runtime: task state (queued/running/waiting approval/done/failed).
+- [x] Tool registry: definisi tool + parameter + policy.
+- [x] Approval gate: langkah sensitif wajib persetujuan.
+- [x] Audit log: catat setiap tool call (input/output/error) dan metadata.
+- [x] Konfigurasi & secret management (tanpa hardcode credential).
+- [ ] UI minimal: daftar task, detail step, halaman approval.
 
-## **Fase 3: Aset & Level**
-**Tujuan:** Memuat konten game dari file eksternal.
-- [ ] Sistem pemuatan aset (Texture Manager).
-- [ ] Integrasi parser JSON/XML untuk data level.
-- [ ] Rendering map berbasis tile (Tilemap Renderer).
-- [ ] Implementasi kamera (Scrolling/Following player).
-- [ ] UI/HUD dasar (Health, Score).
+## **Fase 2: Inbox & Messaging (MVP+)**
+**Tujuan:** Agent bisa membantu mengelola komunikasi harian dengan draft reply dan pengiriman terkontrol.
+- [x] Telegram connector (prioritas cepat untuk MVP).
+- [x] Unified inbox view (minimal untuk 1 channel dulu).
+- [ ] Draft reply + edit + send (dengan approval).
+- [ ] Ringkasan percakapan + action items.
 
-## **Fase 4: Pertarungan & AI**
-**Tujuan:** Menambahkan elemen aksi dan tantangan.
-- [ ] Sistem animasi karakter (State-based animations).
-- [ ] Mekanik serangan melee (pedang) dan ranged (pistol).
-- [ ] Logika AI musuh sederhana (Patroli dan Kejar).
-- [ ] Sistem damage dan health (Player & Enemies).
-- [ ] Integrasi efek suara (SFX) dan musik latar.
+## **Fase 3: Email & Workflow Automation**
+**Tujuan:** Mengurangi beban inbox dan follow-up melalui otomasi yang dapat ditelusuri.
+- [ ] Email connector (IMAP atau provider API).
+- [ ] Klasifikasi email (urgent/needs reply/info only).
+- [ ] Draft reply + template.
+- [ ] Reminder/follow-up tasks dari email/pesan.
 
-## **Fase 5: Refinement & Porting**
-**Tujuan:** Optimalisasi dan penyebaran ke platform lain.
-- [ ] Optimalisasi performa rendering (Batching).
-- [ ] Penambahan efek partikel (debu, ledakan).
-- [ ] Pengujian build WebAssembly (Emscripten).
-- [ ] Perbaikan bug dan pemolesan UX/UI.
-- [ ] Dokumentasi teknis lengkap.
+## **Fase 4: Web Research, Knowledge, & Office Work**
+**Tujuan:** Agent dapat mencari info, merangkum dengan sumber, dan menghasilkan materi kerja.
+- [ ] Web search + fetch + ringkasan dengan daftar sumber.
+- [ ] Knowledge base opsional (ingest dokumen + pencarian).
+- [ ] Output untuk presentasi: outline slide dan poin-poin.
+
+## **Fase 5: Developer Productivity & Hardening**
+**Tujuan:** Tools developer dan ketahanan sistem untuk penggunaan harian.
+- [ ] Tool “run commands” dengan allowlist per proyek (lint/test/build).
+- [ ] Workflow coding: generate perubahan + ringkas diff + catatan PR.
+- [ ] Rate limiting, retry policy, dan idempotency untuk aksi kirim.
+- [ ] Monitoring/observability yang lebih lengkap.

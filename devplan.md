@@ -44,6 +44,8 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Mengubah tool `sendTelegram` menjadi integrasi Telegram Bot API (butuh approval).
 - [x] Menambahkan polling Telegram untuk menerima pesan dan menyimpannya ke inbox (in-memory).
 - [x] Menambahkan endpoint inbox minimal: `/inbox/messages`.
+- [x] Menambahkan ringkasan + action items pada inbox message (heuristik).
+- [x] Menambahkan endpoint ringkasan thread: `/inbox/threads`.
 - [x] Menambahkan endpoint status Telegram: `/connectors/telegram/status`.
 - [x] Menambahkan UI minimal (static web) untuk tasks/approvals/inbox/logs/tools.
 - [x] Menambahkan email connector IMAP (read-only) untuk mengambil email ke inbox (in-memory).
@@ -53,6 +55,7 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Menambahkan SMTP sender tool (approval required): `sendEmail` + status endpoint `/connectors/email/smtp/status`.
 - [x] Upgrade dependency mail sender untuk menutup vulnerability (nodemailer v8).
 - [x] Menambahkan edit draft sebelum approval (PATCH step current) + UI prompt edit untuk step send.
+- [x] Menambahkan reminders + follow-up: endpoint `/reminders` dan tombol follow-up dari inbox.
 
 ### **Next Steps:**
 1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).

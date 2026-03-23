@@ -1,8 +1,9 @@
-import { Task, AuditLog, InboxMessage, InboxChannel } from '../types.js';
+import { Task, AuditLog, InboxMessage, InboxChannel, Reminder, ReminderStatus } from '../types.js';
 
 const tasks = new Map<string, Task>();
 const logs: AuditLog[] = [];
 const inboxMessages: InboxMessage[] = [];
+const reminders: Reminder[] = [];
 
 export const Storage = {
   addTask(task: Task) {
@@ -44,5 +45,25 @@ export const Storage = {
       return true;
     });
     return filtered.slice(-limit);
+  },
+  addReminder(reminder: Reminder) {
+    reminders.push(reminder);
+  },
+  getReminder(id: string) {
+    return reminders.find((r) => r.id === id);
+  },
+  listReminders(options?: { status?: ReminderStatus; limit?: number }) {
+    const limit = options?.limit ?? 100;
+    const status = options?.status;
+    const filtered = reminders.filter((r) => {
+      if (status && r.status !== status) return false;
+      return true;
+    });
+    return filtered.slice(-limit);
+  },
+  updateReminder(id: string, patch: Partial<Reminder>) {
+    const idx = reminders.findIndex((r) => r.id === id);
+    if (idx === -1) return;
+    reminders[idx] = { ...reminders[idx], ...patch };
   },
 };

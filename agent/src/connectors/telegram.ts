@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Storage } from '../storage/memory.js';
 import { Config } from '../config.js';
+import { extractActionItems, summarizeText } from '../summarize.js';
 import type { InboxMessage } from '../types.js';
 
 type TelegramUpdate = {
@@ -94,6 +95,8 @@ export function startTelegramPolling(): void {
           fromId: from ? String(from.id) : undefined,
           fromName,
           text: u.message.text,
+          summary: summarizeText(u.message.text),
+          actionItems: extractActionItems(u.message.text),
           raw: u,
         };
         Storage.addInboxMessage(msg);
@@ -111,4 +114,3 @@ export function startTelegramPolling(): void {
 export async function telegramGetMe(): Promise<unknown> {
   return telegramApiCall('getMe', {});
 }
-

@@ -11,6 +11,8 @@ import { Config } from './config.js';
 import { startTelegramPolling, telegramGetMe } from './connectors/telegram.js';
 import { emailImapStatus, startEmailPolling } from './connectors/email_imap.js';
 import { emailSmtpStatus } from './connectors/email_smtp.js';
+import { extractActionItems, summarizeText } from './summarize.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const app = express();
 app.use(cors());
@@ -102,6 +104,41 @@ app.get('/logs', (_req, res) => {
   res.json({ logs: Storage.listLogs() });
 });
 
+const ReminderCreateSchema = z.object({
+  title: z.string().min(3),
+  note: z.string().optional(),
+  dueAt: z.string().datetime().optional(),
+});
+
+app.get('/reminders', (req, res) => {
+  const status = req.query.status === 'open' ? 'open' : req.query.status === 'done' ? 'done' : undefined;
+  const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+  res.json({ reminders: Storage.listReminders({ status, limit }) });
+});
+
+app.post('/reminders', (req, res) => {
+  const parsed = ReminderCreateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const reminder = {
+    id: uuidv4(),
+    createdAt: new Date().toISOString(),
+    dueAt: parsed.data.dueAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    status: 'open' as const,
+    title: parsed.data.title,
+    note: parsed.data.note,
+  };
+  Storage.addReminder(reminder);
+  res.status(201).json(reminder);
+});
+
+app.post('/reminders/:id/done', (req, res) => {
+  const r = Storage.getReminder(req.params.id);
+  if (!r) return res.status(404).json({ error: 'Reminder not found' });
+  Storage.updateReminder(r.id, { status: 'done' });
+  res.json(Storage.getReminder(r.id));
+});
+
 app.get('/inbox/messages', (req, res) => {
   const channel = req.query.channel === 'telegram' ? 'telegram' : req.query.channel === 'email' ? 'email' : undefined;
   const chatId = typeof req.query.chatId === 'string' ? req.query.chatId : undefined;
@@ -113,6 +150,29 @@ app.get('/inbox/messages/:id', (req, res) => {
   const msg = Storage.getInboxMessage(req.params.id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
   res.json(msg);
+});
+
+app.get('/inbox/threads', (req, res) => {
+  const channel = req.query.channel === 'telegram' ? 'telegram' : req.query.channel === 'email' ? 'email' : undefined;
+  const chatId = typeof req.query.chatId === 'string' ? req.query.chatId : undefined;
+  const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 30;
+  if (!channel) return res.status(400).json({ error: 'channel required (telegram|email)' });
+  if (!chatId) return res.status(400).json({ error: 'chatId required' });
+
+  const messages = Storage.listInboxMessages({ channel, chatId, limit });
+  const joined = messages
+    .map((m) => [m.subject, m.text].filter(Boolean).join(' '))
+    .filter(Boolean)
+    .join('\n');
+
+  res.json({
+    channel,
+    chatId,
+    count: messages.length,
+    summary: summarizeText(joined, 260),
+    actionItems: extractActionItems(joined) ?? [],
+    messages,
+  });
 });
 
 function buildReplyDraft(message: { channel: string; fromName?: string; fromId?: string; subject?: string; text?: string }) {
@@ -147,6 +207,40 @@ app.post('/inbox/messages/:id/reply-task', async (req, res) => {
     { tool: 'sendEmail', params: { to: draft.to, subject: draft.subject, text: draft.text }, requiresApproval: true },
   ]);
   return res.status(201).json({ task, draft });
+});
+
+app.post('/inbox/messages/:id/followup', (req, res) => {
+  const msg = Storage.getInboxMessage(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+  const parsed = z
+    .object({
+      dueAt: z.string().datetime().optional(),
+      title: z.string().optional(),
+      note: z.string().optional(),
+    })
+    .safeParse(req.body ?? {});
+
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const title =
+    parsed.data.title ??
+    (msg.summary ? `Follow-up: ${msg.summary}` : `Follow-up ${msg.channel}:${msg.chatId}`);
+  const note =
+    parsed.data.note ??
+    (msg.actionItems && msg.actionItems.length > 0 ? msg.actionItems.map((a) => `- ${a}`).join('\n') : msg.text);
+
+  const reminder = {
+    id: uuidv4(),
+    createdAt: new Date().toISOString(),
+    dueAt: parsed.data.dueAt ?? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    status: 'open' as const,
+    title,
+    note,
+    source: { channel: msg.channel, messageId: msg.id, chatId: msg.chatId },
+  };
+  Storage.addReminder(reminder);
+  res.status(201).json(reminder);
 });
 
 app.get('/connectors/telegram/status', async (_req, res) => {

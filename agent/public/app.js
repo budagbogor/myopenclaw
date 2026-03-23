@@ -1,9 +1,9 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
-const views = ['tasks', 'approvals', 'inbox', 'logs', 'tools'];
+const views = ['tasks', 'approvals', 'inbox', 'reminders', 'logs', 'tools'];
 let currentView = 'tasks';
-let lastState = { tasks: [], logs: [], inbox: [], tools: [] };
+let lastState = { tasks: [], logs: [], inbox: [], reminders: [], tools: [] };
 
 function setStatus(text, kind) {
   const el = $('#status');
@@ -221,7 +221,10 @@ function renderInbox() {
   const rows = msgs
     .map((m) => {
       const labels = Array.isArray(m.labels) ? m.labels.join(', ') : '';
+      const actions = Array.isArray(m.actionItems) ? m.actionItems.join(' • ') : '';
       const replyBtn = `<button class="btn" data-reply="${m.id}">Reply Task</button>`;
+      const threadBtn = `<button class="btn btn--ghost" data-thread="${escapeHtml(m.channel)}|${escapeHtml(m.chatId)}">Thread</button>`;
+      const followBtn = `<button class="btn btn--ghost" data-followup="${m.id}">Follow-up</button>`;
       return `
         <tr>
           <td>${escapeHtml(m.channel)}</td>
@@ -230,8 +233,10 @@ function renderInbox() {
           <td>${escapeHtml(m.subject ?? '')}</td>
           <td>${escapeHtml(m.text ?? '')}</td>
           <td class="meta">${escapeHtml(labels)}</td>
+          <td class="meta">${escapeHtml(m.summary ?? '')}</td>
+          <td class="meta">${escapeHtml(actions)}</td>
           <td class="meta">${formatTime(m.time)}</td>
-          <td>${replyBtn}</td>
+          <td class="row" style="justify-content:flex-end">${threadBtn}${followBtn}${replyBtn}</td>
         </tr>
       `;
     })
@@ -257,12 +262,14 @@ function renderInbox() {
             <th>Subject</th>
             <th>Text</th>
             <th>Labels</th>
+            <th>Summary</th>
+            <th>Actions</th>
             <th>Time</th>
             <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || `<tr><td colspan="8" class="meta">Belum ada pesan.</td></tr>`}
+          ${rows || `<tr><td colspan="10" class="meta">Belum ada pesan.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -283,6 +290,127 @@ function renderInbox() {
       } catch (e) {
         alert(String(e.message ?? e));
       }
+    });
+  }
+
+  for (const btn of $$('[data-thread]')) {
+    btn.addEventListener('click', async () => {
+      const v = btn.getAttribute('data-thread') ?? '';
+      const [channel, chatId] = v.split('|');
+      try {
+        const data = await api(`/inbox/threads?channel=${encodeURIComponent(channel)}&chatId=${encodeURIComponent(chatId)}&limit=30`);
+        const actionItems = Array.isArray(data.actionItems) ? data.actionItems.map((a) => `- ${a}`).join('\n') : '';
+        alert(`Thread ${data.channel}:${data.chatId}\n\nSummary:\n${data.summary ?? ''}\n\nActions:\n${actionItems}`);
+      } catch (e) {
+        alert(String(e.message ?? e));
+      }
+    });
+  }
+
+  for (const btn of $$('[data-followup]')) {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-followup');
+      try {
+        await api(`/inbox/messages/${id}/followup`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        await refresh();
+        setView('reminders');
+      } catch (e) {
+        alert(String(e.message ?? e));
+      }
+    });
+  }
+}
+
+function renderReminders() {
+  const el = $('#view-reminders');
+  const reminders = lastState.reminders.slice().reverse();
+
+  const rows = reminders
+    .map((r) => {
+      const doneBtn = r.status === 'open' ? `<button class="btn" data-done="${r.id}">Done</button>` : '';
+      const src = r.source ? `${r.source.channel}:${r.source.chatId}` : '';
+      return `
+        <tr>
+          <td>${escapeHtml(r.title)}</td>
+          <td>${escapeHtml(r.status)}</td>
+          <td class="meta">${formatTime(r.dueAt)}</td>
+          <td class="meta">${escapeHtml(src)}</td>
+          <td class="meta">${escapeHtml(r.note ?? '')}</td>
+          <td>${doneBtn}</td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  el.innerHTML = `
+    <div class="grid">
+      <div class="card">
+        <div class="card__title">Create Reminder</div>
+        <div class="form">
+          <input id="rem-title" class="input" placeholder="Judul reminder" />
+          <input id="rem-due" class="input" placeholder="Due ISO (opsional)" />
+          <textarea id="rem-note" class="textarea" placeholder="Catatan (opsional)"></textarea>
+          <div class="row">
+            <button id="create-rem" class="btn">Create</button>
+            <span class="hint">Jika due kosong, default +1 jam.</span>
+          </div>
+          <div id="rem-error" class="hint" style="color: var(--danger)"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card__title">Reminders</div>
+        <div class="hint">Reminder open bisa ditandai selesai.</div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Due</th>
+            <th>Source</th>
+            <th>Note</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || `<tr><td colspan="6" class="meta">Belum ada reminder.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $('#create-rem').addEventListener('click', async () => {
+    const title = $('#rem-title').value.trim();
+    const dueAt = $('#rem-due').value.trim();
+    const note = $('#rem-note').value.trim();
+    const errorEl = $('#rem-error');
+    errorEl.textContent = '';
+    try {
+      const body = { title, note: note || undefined, dueAt: dueAt || undefined };
+      await api('/reminders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await refresh();
+      setView('reminders');
+    } catch (e) {
+      errorEl.textContent = String(e.message ?? e);
+    }
+  });
+
+  for (const btn of $$('[data-done]')) {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-done');
+      await api(`/reminders/${id}/done`, { method: 'POST' });
+      await refresh();
     });
   }
 }
@@ -368,6 +496,7 @@ function render() {
   if (currentView === 'tasks') return renderTasks();
   if (currentView === 'approvals') return renderApprovals();
   if (currentView === 'inbox') return renderInbox();
+  if (currentView === 'reminders') return renderReminders();
   if (currentView === 'logs') return renderLogs();
   if (currentView === 'tools') return renderTools();
 }
@@ -396,13 +525,18 @@ async function refreshInbox() {
   lastState.inbox = data.messages ?? [];
 }
 
+async function refreshReminders() {
+  const data = await api('/reminders?limit=100');
+  lastState.reminders = data.reminders ?? [];
+}
+
 async function refreshTools() {
   const data = await api('/tools');
   lastState.tools = data.tools ?? [];
 }
 
 async function refresh() {
-  await Promise.all([refreshHealth(), refreshTasks(), refreshLogs(), refreshInbox(), refreshTools()]);
+  await Promise.all([refreshHealth(), refreshTasks(), refreshLogs(), refreshInbox(), refreshReminders(), refreshTools()]);
 }
 
 function escapeHtml(v) {

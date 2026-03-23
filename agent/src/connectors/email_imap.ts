@@ -3,6 +3,7 @@ import { simpleParser } from 'mailparser';
 import { v4 as uuidv4 } from 'uuid';
 import { Config } from '../config.js';
 import { Storage } from '../storage/memory.js';
+import { extractActionItems, summarizeText } from '../summarize.js';
 import type { InboxMessage } from '../types.js';
 
 function classifyEmail(subject?: string, text?: string): { labels: string[]; needsReply: boolean } {
@@ -80,6 +81,8 @@ export function startEmailPolling(): void {
             subject,
             labels: classification.labels,
             needsReply: classification.needsReply,
+            summary: summarizeText([subject, text].filter(Boolean).join(' - ')),
+            actionItems: extractActionItems(text),
             raw: {
               uid: msg.uid,
               envelope: msg.envelope,

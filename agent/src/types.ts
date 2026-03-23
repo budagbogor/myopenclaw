@@ -40,7 +40,25 @@ export interface InboxMessage {
   subject?: string;
   labels?: string[];
   needsReply?: boolean;
+  summary?: string;
+  actionItems?: string[];
   raw: unknown;
+}
+
+export type ReminderStatus = 'open' | 'done';
+
+export interface Reminder {
+  id: string;
+  createdAt: string;
+  dueAt: string;
+  status: ReminderStatus;
+  title: string;
+  note?: string;
+  source?: {
+    channel: InboxChannel;
+    messageId: string;
+    chatId: string;
+  };
 }
 
 export interface Tool {

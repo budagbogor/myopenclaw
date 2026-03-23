@@ -21,14 +21,15 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 **Tujuan:** Agent bisa membantu mengelola komunikasi harian dengan draft reply dan pengiriman terkontrol.
 - [x] Telegram connector (prioritas cepat untuk MVP).
 - [x] Unified inbox view (minimal untuk 1 channel dulu).
+- [x] Membuat reply task dari inbox message (dengan approval).
 - [ ] Draft reply + edit + send (dengan approval).
 - [ ] Ringkasan percakapan + action items.
 
 ## **Fase 3: Email & Workflow Automation**
 **Tujuan:** Mengurangi beban inbox dan follow-up melalui otomasi yang dapat ditelusuri.
 - [x] Email connector (IMAP atau provider API).
-- [ ] Klasifikasi email (urgent/needs reply/info only).
-- [ ] Draft reply + template.
+- [x] Klasifikasi email (urgent/needs reply/info only).
+- [x] Draft reply + template.
 - [ ] Reminder/follow-up tasks dari email/pesan.
 
 ## **Fase 4: Web Research, Knowledge, & Office Work**

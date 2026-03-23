@@ -38,6 +38,8 @@ export interface InboxMessage {
   fromName?: string;
   text?: string;
   subject?: string;
+  labels?: string[];
+  needsReply?: boolean;
   raw: unknown;
 }
 

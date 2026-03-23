@@ -48,11 +48,16 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Menambahkan UI minimal (static web) untuk tasks/approvals/inbox/logs/tools.
 - [x] Menambahkan email connector IMAP (read-only) untuk mengambil email ke inbox (in-memory).
 - [x] Menambahkan endpoint status email: `/connectors/email/status`.
+- [x] Menambahkan klasifikasi email (labels + needs_reply) saat ingest IMAP.
+- [x] Menambahkan workflow reply-task dari inbox message: `/inbox/messages/:id/reply-task`.
+- [x] Menambahkan SMTP sender tool (approval required): `sendEmail` + status endpoint `/connectors/email/smtp/status`.
+- [x] Upgrade dependency mail sender untuk menutup vulnerability (nodemailer v8).
 
 ### **Next Steps:**
 1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).
 2. Mengaktifkan bot Telegram real: set `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_POLLING=true`.
 3. Menambahkan allowlist chatId (opsional) untuk keamanan: `TELEGRAM_ALLOWLIST_CHAT_IDS`.
 4. Memulai email connector (IMAP/provider API) untuk workflow inbox.
-5. Menambahkan klasifikasi email dan draft reply workflow.
-6. Menambahkan alur “draft reply” dari inbox message (Telegram/Email) ke task yang butuh approval.
+5. Mengaktifkan email polling real: set `EMAIL_POLLING=true` + `EMAIL_IMAP_*`.
+6. Menyiapkan SMTP untuk kirim email (opsional): set `EMAIL_SMTP_*` dan uji sendEmail dengan approval.
+7. Menambahkan fitur edit draft sebelum approval (Telegram/Email) di UI.

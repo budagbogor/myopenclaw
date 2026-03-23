@@ -5,6 +5,25 @@ import { Config } from '../config.js';
 import { Storage } from '../storage/memory.js';
 import type { InboxMessage } from '../types.js';
 
+function classifyEmail(subject?: string, text?: string): { labels: string[]; needsReply: boolean } {
+  const s = (subject ?? '').toLowerCase();
+  const t = (text ?? '').toLowerCase();
+
+  const labels: string[] = [];
+  const urgentWords = ['urgent', 'asap', 'segera', 'penting', 'priority', 'secepatnya'];
+  const needsReplyWords = ['tolong', 'mohon', 'minta', 'please', 'bisa', 'dapatkah', '?'];
+
+  if (urgentWords.some((w) => s.includes(w) || t.includes(w))) labels.push('urgent');
+  if (s.includes('invoice') || t.includes('invoice')) labels.push('billing');
+  if (s.includes('meeting') || t.includes('meeting') || s.includes('jadwal')) labels.push('meeting');
+
+  const needsReply = needsReplyWords.some((w) => s.includes(w) || t.includes(w));
+  if (needsReply) labels.push('needs_reply');
+  if (labels.length === 0) labels.push('info');
+
+  return { labels, needsReply };
+}
+
 function isConfigured(): boolean {
   const c = Config.email.imap;
   return !!(c.host && c.user && c.pass);
@@ -44,18 +63,23 @@ export function startEmailPolling(): void {
           lastUid = Math.max(lastUid ?? 0, Number(msg.uid));
 
           const parsed = await simpleParser(msg.source);
-          const from = parsed.from?.text || msg.envelope?.from?.[0]?.address || undefined;
+          const fromAddr = parsed.from?.value?.[0]?.address || msg.envelope?.from?.[0]?.address || undefined;
+          const from = parsed.from?.text || fromAddr || undefined;
           const subject = parsed.subject || msg.envelope?.subject || undefined;
           const text = (parsed.text ?? parsed.html ?? '').toString().slice(0, 4000) || undefined;
+          const classification = classifyEmail(subject, text);
 
           const entry: InboxMessage = {
             id: uuidv4(),
             channel: 'email',
             time: new Date().toISOString(),
             chatId: c.mailbox,
+            fromId: fromAddr,
             fromName: from,
             text,
             subject,
+            labels: classification.labels,
+            needsReply: classification.needsReply,
             raw: {
               uid: msg.uid,
               envelope: msg.envelope,
@@ -86,4 +110,3 @@ export async function emailImapStatus(): Promise<{ enabled: boolean; reason?: st
   if (!isConfigured()) return { enabled: false, reason: 'Konfigurasi IMAP belum lengkap (EMAIL_IMAP_HOST/USER/PASS)' };
   return { enabled: true, mailbox: Config.email.imap.mailbox };
 }
-

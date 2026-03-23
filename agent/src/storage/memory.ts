@@ -26,6 +26,14 @@ export const Storage = {
   addInboxMessage(message: InboxMessage) {
     inboxMessages.push(message);
   },
+  getInboxMessage(id: string) {
+    return inboxMessages.find((m) => m.id === id);
+  },
+  updateInboxMessage(id: string, patch: Partial<InboxMessage>) {
+    const idx = inboxMessages.findIndex((m) => m.id === id);
+    if (idx === -1) return;
+    inboxMessages[idx] = { ...inboxMessages[idx], ...patch };
+  },
   listInboxMessages(options?: { channel?: InboxChannel; chatId?: string; limit?: number }) {
     const limit = options?.limit ?? 50;
     const channel = options?.channel;

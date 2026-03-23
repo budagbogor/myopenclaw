@@ -24,6 +24,15 @@ const EnvSchema = z.object({
     .optional()
     .transform((v) => v === '1' || v?.toLowerCase() === 'true'),
   EMAIL_POLL_INTERVAL_MS: z.coerce.number().optional(),
+  EMAIL_SMTP_HOST: z.string().optional(),
+  EMAIL_SMTP_PORT: z.coerce.number().optional(),
+  EMAIL_SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => v === '1' || v?.toLowerCase() === 'true'),
+  EMAIL_SMTP_USER: z.string().optional(),
+  EMAIL_SMTP_PASS: z.string().optional(),
+  EMAIL_SMTP_FROM: z.string().optional(),
 });
 
 const env = EnvSchema.parse(process.env);
@@ -57,5 +66,13 @@ export const Config = {
     },
     pollingEnabled: env.EMAIL_POLLING ?? false,
     pollIntervalMs: env.EMAIL_POLL_INTERVAL_MS ?? 5000,
+    smtp: {
+      host: env.EMAIL_SMTP_HOST,
+      port: env.EMAIL_SMTP_PORT ?? 587,
+      secure: env.EMAIL_SMTP_SECURE ?? false,
+      user: env.EMAIL_SMTP_USER,
+      pass: env.EMAIL_SMTP_PASS,
+      from: env.EMAIL_SMTP_FROM,
+    },
   },
 };

@@ -1,5 +1,6 @@
 import { Tool } from '../types.js';
 import { telegramSendMessage } from '../connectors/telegram.js';
+import { emailSendSmtp } from '../connectors/email_smtp.js';
 
 const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -33,6 +34,20 @@ export const Tools: Record<string, Tool> = {
       const text = String(params.text ?? '');
       const result = await telegramSendMessage(chatId, text);
       return { chatId, sent: true, text, result };
+    },
+  },
+  sendEmail: {
+    name: 'sendEmail',
+    description: 'Kirim email via SMTP (butuh approval).',
+    approvalRequired: () => true,
+    run: async (params) => {
+      const to = String(params.to ?? '');
+      const subject = String(params.subject ?? '');
+      const text = String(params.text ?? '');
+      if (!to) throw new Error('Missing to');
+      if (!subject) throw new Error('Missing subject');
+      const result = await emailSendSmtp(to, subject, text);
+      return { to, subject, sent: true, result };
     },
   },
 };

@@ -190,6 +190,8 @@ function renderInbox() {
   const msgs = lastState.inbox.slice().reverse();
   const rows = msgs
     .map((m) => {
+      const labels = Array.isArray(m.labels) ? m.labels.join(', ') : '';
+      const replyBtn = `<button class="btn" data-reply="${m.id}">Reply Task</button>`;
       return `
         <tr>
           <td>${escapeHtml(m.channel)}</td>
@@ -197,7 +199,9 @@ function renderInbox() {
           <td>${escapeHtml(m.fromName ?? '')}</td>
           <td>${escapeHtml(m.subject ?? '')}</td>
           <td>${escapeHtml(m.text ?? '')}</td>
+          <td class="meta">${escapeHtml(labels)}</td>
           <td class="meta">${formatTime(m.time)}</td>
+          <td>${replyBtn}</td>
         </tr>
       `;
     })
@@ -222,11 +226,13 @@ function renderInbox() {
             <th>From</th>
             <th>Subject</th>
             <th>Text</th>
+            <th>Labels</th>
             <th>Time</th>
+            <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || `<tr><td colspan="6" class="meta">Belum ada pesan.</td></tr>`}
+          ${rows || `<tr><td colspan="8" class="meta">Belum ada pesan.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -236,6 +242,19 @@ function renderInbox() {
     await refreshInbox();
     render();
   });
+
+  for (const btn of $$('[data-reply]')) {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-reply');
+      try {
+        await api(`/inbox/messages/${id}/reply-task`, { method: 'POST' });
+        await refresh();
+        setView('tasks');
+      } catch (e) {
+        alert(String(e.message ?? e));
+      }
+    });
+  }
 }
 
 function renderLogs() {
@@ -374,7 +393,7 @@ function defaultSteps() {
   return JSON.stringify(
     [
       { tool: 'webSearch', params: { query: 'ringkas berita teknologi hari ini' } },
-      { tool: 'sendTelegram', params: { chatId: '123', text: 'Halo dari MyClaw (via approval)' } },
+      { tool: 'sendTelegram', params: { chatId: '123', text: 'Halo dari MyClaw (via approval)' }, requiresApproval: true },
     ],
     null,
     2

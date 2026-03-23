@@ -10,6 +10,7 @@ import { enqueueTask, approveAndContinue } from './agent.js';
 import { Config } from './config.js';
 import { startTelegramPolling, telegramGetMe } from './connectors/telegram.js';
 import { emailImapStatus, startEmailPolling } from './connectors/email_imap.js';
+import { emailSmtpStatus } from './connectors/email_smtp.js';
 
 const app = express();
 app.use(cors());
@@ -74,10 +75,50 @@ app.get('/logs', (_req, res) => {
 });
 
 app.get('/inbox/messages', (req, res) => {
-  const channel = req.query.channel === 'telegram' ? 'telegram' : undefined;
+  const channel = req.query.channel === 'telegram' ? 'telegram' : req.query.channel === 'email' ? 'email' : undefined;
   const chatId = typeof req.query.chatId === 'string' ? req.query.chatId : undefined;
   const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
   res.json({ messages: Storage.listInboxMessages({ channel, chatId, limit }) });
+});
+
+app.get('/inbox/messages/:id', (req, res) => {
+  const msg = Storage.getInboxMessage(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Message not found' });
+  res.json(msg);
+});
+
+function buildReplyDraft(message: { channel: string; fromName?: string; fromId?: string; subject?: string; text?: string }) {
+  if (message.channel === 'telegram') {
+    const body = `Siap, saya bantu. Bisa jelaskan detailnya?`;
+    return { channel: 'telegram' as const, text: body };
+  }
+
+  const subject = message.subject ? (message.subject.toLowerCase().startsWith('re:') ? message.subject : `Re: ${message.subject}`) : 'Re: (no subject)';
+  const greeting = message.fromName ? `Halo ${message.fromName},` : `Halo,`;
+  const body = `${greeting}\n\nTerima kasih emailnya. Saya sudah terima dan akan saya tindaklanjuti.\n\nSalam,\n`;
+  return { channel: 'email' as const, to: message.fromId ?? '', subject, text: body };
+}
+
+app.post('/inbox/messages/:id/reply-task', async (req, res) => {
+  const msg = Storage.getInboxMessage(req.params.id);
+  if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+  const draft = buildReplyDraft(msg);
+  if (draft.channel === 'telegram') {
+    const task = await enqueueTask(`Reply Telegram (${msg.chatId})`, [
+      { tool: 'sendTelegram', params: { chatId: msg.chatId, text: draft.text }, requiresApproval: true },
+    ]);
+    return res.status(201).json({ task, draft });
+  }
+
+  if (!draft.to) {
+    return res.status(400).json({ error: 'Email sender address not available (fromId kosong)' });
+  }
+
+  const task = await enqueueTask(`Reply Email (${draft.to})`, [
+    { tool: 'sendEmail', params: { to: draft.to, subject: draft.subject, text: draft.text }, requiresApproval: true },
+  ]);
+  return res.status(201).json({ task, draft });
 });
 
 app.get('/connectors/telegram/status', async (_req, res) => {
@@ -95,6 +136,15 @@ app.get('/connectors/telegram/status', async (_req, res) => {
 app.get('/connectors/email/status', async (_req, res) => {
   try {
     const status = await emailImapStatus();
+    res.json(status);
+  } catch (e: any) {
+    res.status(500).json({ enabled: false, error: String(e?.message ?? e) });
+  }
+});
+
+app.get('/connectors/email/smtp/status', async (_req, res) => {
+  try {
+    const status = await emailSmtpStatus();
     res.json(status);
   } catch (e: any) {
     res.status(500).json({ enabled: false, error: String(e?.message ?? e) });

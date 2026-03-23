@@ -26,7 +26,7 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 
 ## **Fase 3: Email & Workflow Automation**
 **Tujuan:** Mengurangi beban inbox dan follow-up melalui otomasi yang dapat ditelusuri.
-- [ ] Email connector (IMAP atau provider API).
+- [x] Email connector (IMAP atau provider API).
 - [ ] Klasifikasi email (urgent/needs reply/info only).
 - [ ] Draft reply + template.
 - [ ] Reminder/follow-up tasks dari email/pesan.

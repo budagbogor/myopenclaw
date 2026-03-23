@@ -10,6 +10,20 @@ const EnvSchema = z.object({
     .transform((v) => v === '1' || v?.toLowerCase() === 'true'),
   TELEGRAM_POLL_INTERVAL_MS: z.coerce.number().optional(),
   TELEGRAM_ALLOWLIST_CHAT_IDS: z.string().optional(),
+  EMAIL_IMAP_HOST: z.string().optional(),
+  EMAIL_IMAP_PORT: z.coerce.number().optional(),
+  EMAIL_IMAP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => v === '1' || v?.toLowerCase() === 'true'),
+  EMAIL_IMAP_USER: z.string().optional(),
+  EMAIL_IMAP_PASS: z.string().optional(),
+  EMAIL_IMAP_MAILBOX: z.string().optional(),
+  EMAIL_POLLING: z
+    .string()
+    .optional()
+    .transform((v) => v === '1' || v?.toLowerCase() === 'true'),
+  EMAIL_POLL_INTERVAL_MS: z.coerce.number().optional(),
 });
 
 const env = EnvSchema.parse(process.env);
@@ -32,5 +46,16 @@ export const Config = {
     pollIntervalMs: env.TELEGRAM_POLL_INTERVAL_MS ?? 2000,
     allowlistChatIds: parseAllowlist(env.TELEGRAM_ALLOWLIST_CHAT_IDS),
   },
+  email: {
+    imap: {
+      host: env.EMAIL_IMAP_HOST,
+      port: env.EMAIL_IMAP_PORT ?? 993,
+      secure: env.EMAIL_IMAP_SECURE ?? true,
+      user: env.EMAIL_IMAP_USER,
+      pass: env.EMAIL_IMAP_PASS,
+      mailbox: env.EMAIL_IMAP_MAILBOX ?? 'INBOX',
+    },
+    pollingEnabled: env.EMAIL_POLLING ?? false,
+    pollIntervalMs: env.EMAIL_POLL_INTERVAL_MS ?? 5000,
+  },
 };
-

@@ -13,6 +13,7 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 | 2026-03-23 | Pivot Produk | Ubah arah: dari game engine menjadi agentic AI untuk pekerjaan rutin | Selesai |
 | 2026-03-23 | Revisi Dokumen | Update PRD + fase pengembangan sesuai agentic AI | Selesai |
 | 2026-03-24 | Telegram Connector (MVP+) | Integrasi Telegram (send + polling) + inbox API minimal | Selesai |
+| 2026-03-24 | Email Connector (MVP+) | Integrasi IMAP read-only (polling) + status endpoint | Selesai |
 
 ---
 
@@ -45,6 +46,8 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Menambahkan endpoint inbox minimal: `/inbox/messages`.
 - [x] Menambahkan endpoint status Telegram: `/connectors/telegram/status`.
 - [x] Menambahkan UI minimal (static web) untuk tasks/approvals/inbox/logs/tools.
+- [x] Menambahkan email connector IMAP (read-only) untuk mengambil email ke inbox (in-memory).
+- [x] Menambahkan endpoint status email: `/connectors/email/status`.
 
 ### **Next Steps:**
 1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).
@@ -52,3 +55,4 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 3. Menambahkan allowlist chatId (opsional) untuk keamanan: `TELEGRAM_ALLOWLIST_CHAT_IDS`.
 4. Memulai email connector (IMAP/provider API) untuk workflow inbox.
 5. Menambahkan klasifikasi email dan draft reply workflow.
+6. Menambahkan alur “draft reply” dari inbox message (Telegram/Email) ke task yang butuh approval.

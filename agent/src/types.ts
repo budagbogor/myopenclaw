@@ -1,6 +1,6 @@
 export type TaskStatus = 'queued' | 'running' | 'waiting_approval' | 'done' | 'failed';
 
-export type InboxChannel = 'telegram';
+export type InboxChannel = 'telegram' | 'email';
 
 export interface ToolCall {
   tool: string;
@@ -37,6 +37,7 @@ export interface InboxMessage {
   fromId?: string;
   fromName?: string;
   text?: string;
+  subject?: string;
   raw: unknown;
 }
 

@@ -9,6 +9,7 @@ import { Storage } from './storage/memory.js';
 import { enqueueTask, approveAndContinue } from './agent.js';
 import { Config } from './config.js';
 import { startTelegramPolling, telegramGetMe } from './connectors/telegram.js';
+import { emailImapStatus, startEmailPolling } from './connectors/email_imap.js';
 
 const app = express();
 app.use(cors());
@@ -91,7 +92,17 @@ app.get('/connectors/telegram/status', async (_req, res) => {
   }
 });
 
+app.get('/connectors/email/status', async (_req, res) => {
+  try {
+    const status = await emailImapStatus();
+    res.json(status);
+  } catch (e: any) {
+    res.status(500).json({ enabled: false, error: String(e?.message ?? e) });
+  }
+});
+
 startTelegramPolling();
+startEmailPolling();
 
 app.listen(Config.port, () => {
   console.log(`MyClaw Agent listening on http://localhost:${Config.port}`);

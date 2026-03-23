@@ -195,6 +195,7 @@ function renderInbox() {
           <td>${escapeHtml(m.channel)}</td>
           <td>${escapeHtml(m.chatId)}</td>
           <td>${escapeHtml(m.fromName ?? '')}</td>
+          <td>${escapeHtml(m.subject ?? '')}</td>
           <td>${escapeHtml(m.text ?? '')}</td>
           <td class="meta">${formatTime(m.time)}</td>
         </tr>
@@ -219,12 +220,13 @@ function renderInbox() {
             <th>Channel</th>
             <th>Chat</th>
             <th>From</th>
+            <th>Subject</th>
             <th>Text</th>
             <th>Time</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || `<tr><td colspan="5" class="meta">Belum ada pesan.</td></tr>`}
+          ${rows || `<tr><td colspan="6" class="meta">Belum ada pesan.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -341,7 +343,7 @@ async function refreshLogs() {
 }
 
 async function refreshInbox() {
-  const data = await api('/inbox/messages?channel=telegram&limit=50');
+  const data = await api('/inbox/messages?limit=50');
   lastState.inbox = data.messages ?? [];
 }
 

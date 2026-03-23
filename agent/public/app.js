@@ -60,6 +60,10 @@ function renderTasks() {
         t.status === 'waiting_approval'
           ? `<button class="btn" data-approve="${t.id}">Approve Next Step</button>`
           : '';
+      const editBtn =
+        t.status === 'waiting_approval'
+          ? `<button class="btn btn--ghost" data-edit="${t.id}">Edit Draft</button>`
+          : '';
       return `
         <div class="card">
           <div class="row">
@@ -69,6 +73,7 @@ function renderTasks() {
             </div>
             <div class="row">
               ${pill(t.status)}
+              ${editBtn}
               ${approveBtn}
             </div>
           </div>
@@ -131,6 +136,31 @@ function renderTasks() {
     btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-approve');
       await api(`/approvals/${id}`, { method: 'POST' });
+      await refresh();
+    });
+  }
+
+  for (const btn of $$('[data-edit]')) {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-edit');
+      const task = await api(`/tasks/${id}`);
+      const step = task.steps?.[task.currentStep];
+      if (!step) return;
+      const json = JSON.stringify(step.params ?? {}, null, 2);
+      const next = prompt('Edit params untuk step saat ini (JSON):', json);
+      if (!next) return;
+      let params;
+      try {
+        params = JSON.parse(next);
+      } catch {
+        alert('JSON tidak valid.');
+        return;
+      }
+      await api(`/tasks/${id}/steps/${task.currentStep}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ params }),
+      });
       await refresh();
     });
   }

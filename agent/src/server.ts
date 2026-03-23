@@ -70,6 +70,34 @@ app.post('/approvals/:id', async (req, res) => {
   res.json(task);
 });
 
+const PatchStepSchema = z.object({
+  params: z.record(z.any()),
+});
+
+app.patch('/tasks/:id/steps/:stepIndex', (req, res) => {
+  const task = Storage.getTask(req.params.id);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+
+  const stepIndex = Number(req.params.stepIndex);
+  if (!Number.isFinite(stepIndex)) return res.status(400).json({ error: 'Invalid stepIndex' });
+  if (stepIndex !== task.currentStep) return res.status(400).json({ error: 'Only currentStep can be edited' });
+  if (task.status !== 'waiting_approval') return res.status(400).json({ error: 'Task not waiting approval' });
+
+  const parsed = PatchStepSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const step = task.steps[stepIndex];
+  if (!step) return res.status(404).json({ error: 'Step not found' });
+
+  if (step.tool !== 'sendTelegram' && step.tool !== 'sendEmail') {
+    return res.status(400).json({ error: 'Only sendTelegram/sendEmail steps are editable' });
+  }
+
+  task.steps[stepIndex] = { ...step, params: parsed.data.params };
+  Storage.updateTask(task);
+  res.json(task);
+});
+
 app.get('/logs', (_req, res) => {
   res.json({ logs: Storage.listLogs() });
 });

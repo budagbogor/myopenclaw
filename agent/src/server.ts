@@ -15,7 +15,8 @@ import { extractActionItems, summarizeText } from './summarize.js';
 import { v4 as uuidv4 } from 'uuid';
 import { makePresentationOutline } from './presentation.js';
 import { rateLimit } from './rate_limit.js';
-import { listAllModels, getSelectedModel, smartSwitch, selectModel } from './ai/registry.js';
+import { listAllModels, getSelectedModel, smartSwitch, selectModel, getApiKeysStatus, setApiKeys, testProvider } from './ai/registry.js';
+import { buildPlan, plannerExamples } from './planner.js';
 
 const app = express();
 app.use(cors());
@@ -60,6 +61,31 @@ app.get('/ai/status', async (_req, res) => {
   res.json(cur);
 });
 
+app.get('/ai/keys/status', async (_req, res) => {
+  res.json(getApiKeysStatus());
+});
+
+const KeysSchema = z.object({
+  openrouter: z.string().min(1).optional(),
+  sumopod: z.string().min(1).optional(),
+  bytez: z.string().min(1).optional(),
+});
+
+app.post('/ai/keys', writeLimiter, async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  const parsed = KeysSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  setApiKeys(parsed.data);
+  res.json(getApiKeysStatus());
+});
+
+app.get('/ai/test', writeLimiter, async (req, res) => {
+  const provider = req.query.provider === 'openrouter' ? 'openrouter' : req.query.provider === 'sumopod' ? 'sumopod' : req.query.provider === 'bytez' ? 'bytez' : req.query.provider === 'auto' ? 'auto' : undefined;
+  if (!provider) return res.status(400).json({ error: 'provider required (auto|openrouter|sumopod|bytez)' });
+  const out = await testProvider(provider);
+  res.json(out);
+});
+
 const SelectSchema = z.object({
   provider: z.enum(['auto', 'openrouter', 'sumopod', 'bytez']),
   modelId: z.string().optional(),
@@ -75,6 +101,22 @@ app.post('/ai/select', writeLimiter, async (req, res) => {
 app.post('/ai/smart-switch', writeLimiter, async (_req, res) => {
   const cur = await smartSwitch();
   res.json(cur);
+});
+
+app.get('/planner/examples', (_req, res) => {
+  res.json({ examples: plannerExamples() });
+});
+
+const PlannerSchema = z.object({
+  goal: z.string().min(3),
+  mode: z.enum(['auto', 'web', 'telegram', 'email', 'git', 'command', 'present']).optional(),
+});
+
+app.post('/planner/plan', writeLimiter, (req, res) => {
+  const parsed = PlannerSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const plan = buildPlan(parsed.data.goal, parsed.data.mode);
+  res.json(plan);
 });
 const TaskSchema = z.object({
   title: z.string().min(3),

@@ -4,10 +4,29 @@ import { Tools } from './tools/index.js';
 import { Config } from './config.js';
 import type { Task, ToolCall } from './types.js';
 
+const taskLocks = new Set<string>();
+const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 function isToolAllowed(toolName: string): boolean {
   const allow = Config.allowedTools;
   if (!allow) return true;
   return allow.has(toolName);
+}
+
+async function withTaskLock<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
+  while (taskLocks.has(taskId)) {
+    await wait(25);
+  }
+  taskLocks.add(taskId);
+  try {
+    return await fn();
+  } finally {
+    taskLocks.delete(taskId);
+  }
+}
+
+function hasStepSuccess(task: Task, stepIndex: number): boolean {
+  return task.logs.some((l) => l.stepIndex === stepIndex && l.status === 'success');
 }
 
 export async function enqueueTask(title: string, steps: ToolCall[]): Promise<Task> {
@@ -26,85 +45,186 @@ export async function enqueueTask(title: string, steps: ToolCall[]): Promise<Tas
 }
 
 export async function runTask(taskId: string): Promise<void> {
-  const task = Storage.getTask(taskId);
-  if (!task) return;
-  if (task.status === 'done' || task.status === 'failed') return;
+  await withTaskLock(taskId, async () => {
+    const task = Storage.getTask(taskId);
+    if (!task) return;
+    if (task.status === 'done' || task.status === 'failed') return;
 
-  task.status = 'running';
-  Storage.updateTask(task);
+    task.status = 'running';
+    Storage.updateTask(task);
 
-  while (task.currentStep < task.steps.length) {
+    while (task.currentStep < task.steps.length) {
+      const idx = task.currentStep;
+      if (hasStepSuccess(task, idx)) {
+        task.currentStep += 1;
+        Storage.updateTask(task);
+        continue;
+      }
+
+      const step = task.steps[idx];
+      const tool = Tools[step.tool];
+      if (!isToolAllowed(step.tool)) {
+        const error = `Tool blocked by policy: ${step.tool}`;
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          error,
+          status: 'error',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        task.status = 'failed';
+        Storage.updateTask(task);
+        return;
+      }
+      if (!tool) {
+        const error = `Tool not found: ${step.tool}`;
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          error,
+          status: 'error',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        task.status = 'failed';
+        Storage.updateTask(task);
+        return;
+      }
+
+      if (Config.mode === 'read_only' && tool.effect === 'write') {
+        const error = `Tool blocked (read_only mode): ${step.tool}`;
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          error,
+          status: 'error',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        task.status = 'failed';
+        Storage.updateTask(task);
+        return;
+      }
+
+      const needsApproval = step.requiresApproval || tool.approvalRequired?.(step.params) === true;
+      if (needsApproval) {
+        task.status = 'waiting_approval';
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          status: 'waiting_approval',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        Storage.updateTask(task);
+        return;
+      }
+
+      try {
+        const output = await tool.run(step.params);
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          output,
+          status: 'success',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        task.currentStep += 1;
+        Storage.updateTask(task);
+      } catch (e: any) {
+        const entry = {
+          time: new Date().toISOString(),
+          taskId: task.id,
+          stepIndex: idx,
+          tool: step.tool,
+          input: step.params,
+          error: String(e?.message ?? e),
+          status: 'error',
+        } as const;
+        task.logs.push(entry);
+        Storage.addLog(entry);
+        task.status = 'failed';
+        Storage.updateTask(task);
+        return;
+      }
+    }
+
+    task.status = 'done';
+    Storage.updateTask(task);
+  });
+}
+
+export async function approveAndContinue(taskId: string): Promise<Task | undefined> {
+  return withTaskLock(taskId, async () => {
+    const task = Storage.getTask(taskId);
+    if (!task) return;
+    if (task.status !== 'waiting_approval') return task;
+
     const idx = task.currentStep;
+    if (hasStepSuccess(task, idx)) {
+      task.currentStep += 1;
+      task.status = 'running';
+      Storage.updateTask(task);
+      await runTask(task.id);
+      return task;
+    }
+
     const step = task.steps[idx];
     const tool = Tools[step.tool];
     if (!isToolAllowed(step.tool)) {
-      const error = `Tool blocked by policy: ${step.tool}`;
       const entry = {
         time: new Date().toISOString(),
         taskId: task.id,
         stepIndex: idx,
         tool: step.tool,
         input: step.params,
-        error,
+        error: `Tool blocked by policy: ${step.tool}`,
         status: 'error',
       } as const;
       task.logs.push(entry);
       Storage.addLog(entry);
       task.status = 'failed';
       Storage.updateTask(task);
-      return;
+      return task;
     }
     if (!tool) {
-      const error = `Tool not found: ${step.tool}`;
-      const entry = {
-        time: new Date().toISOString(),
-        taskId: task.id,
-        stepIndex: idx,
-        tool: step.tool,
-        input: step.params,
-        error,
-        status: 'error',
-      } as const;
-      task.logs.push(entry);
-      Storage.addLog(entry);
       task.status = 'failed';
       Storage.updateTask(task);
-      return;
+      return task;
     }
 
     if (Config.mode === 'read_only' && tool.effect === 'write') {
-      const error = `Tool blocked (read_only mode): ${step.tool}`;
       const entry = {
         time: new Date().toISOString(),
         taskId: task.id,
         stepIndex: idx,
         tool: step.tool,
         input: step.params,
-        error,
+        error: `Tool blocked (read_only mode): ${step.tool}`,
         status: 'error',
       } as const;
       task.logs.push(entry);
       Storage.addLog(entry);
       task.status = 'failed';
       Storage.updateTask(task);
-      return;
-    }
-
-    const needsApproval = step.requiresApproval || tool.approvalRequired?.(step.params) === true;
-    if (needsApproval) {
-      task.status = 'waiting_approval';
-      const entry = {
-        time: new Date().toISOString(),
-        taskId: task.id,
-        stepIndex: idx,
-        tool: step.tool,
-        input: step.params,
-        status: 'waiting_approval',
-      } as const;
-      task.logs.push(entry);
-      Storage.addLog(entry);
-      Storage.updateTask(task);
-      return;
+      return task;
     }
 
     try {
@@ -121,7 +241,9 @@ export async function runTask(taskId: string): Promise<void> {
       task.logs.push(entry);
       Storage.addLog(entry);
       task.currentStep += 1;
+      task.status = 'running';
       Storage.updateTask(task);
+      await runTask(task.id);
     } catch (e: any) {
       const entry = {
         time: new Date().toISOString(),
@@ -136,92 +258,7 @@ export async function runTask(taskId: string): Promise<void> {
       Storage.addLog(entry);
       task.status = 'failed';
       Storage.updateTask(task);
-      return;
     }
-  }
-
-  task.status = 'done';
-  Storage.updateTask(task);
-}
-
-export async function approveAndContinue(taskId: string): Promise<Task | undefined> {
-  const task = Storage.getTask(taskId);
-  if (!task) return;
-  if (task.status !== 'waiting_approval') return task;
-
-  const idx = task.currentStep;
-  const step = task.steps[idx];
-  const tool = Tools[step.tool];
-  if (!isToolAllowed(step.tool)) {
-    const entry = {
-      time: new Date().toISOString(),
-      taskId: task.id,
-      stepIndex: idx,
-      tool: step.tool,
-      input: step.params,
-      error: `Tool blocked by policy: ${step.tool}`,
-      status: 'error',
-    } as const;
-    task.logs.push(entry);
-    Storage.addLog(entry);
-    task.status = 'failed';
-    Storage.updateTask(task);
     return task;
-  }
-  if (!tool) {
-    task.status = 'failed';
-    Storage.updateTask(task);
-    return task;
-  }
-
-  if (Config.mode === 'read_only' && tool.effect === 'write') {
-    const entry = {
-      time: new Date().toISOString(),
-      taskId: task.id,
-      stepIndex: idx,
-      tool: step.tool,
-      input: step.params,
-      error: `Tool blocked (read_only mode): ${step.tool}`,
-      status: 'error',
-    } as const;
-    task.logs.push(entry);
-    Storage.addLog(entry);
-    task.status = 'failed';
-    Storage.updateTask(task);
-    return task;
-  }
-
-  try {
-    const output = await tool.run(step.params);
-    const entry = {
-      time: new Date().toISOString(),
-      taskId: task.id,
-      stepIndex: idx,
-      tool: step.tool,
-      input: step.params,
-      output,
-      status: 'success',
-    } as const;
-    task.logs.push(entry);
-    Storage.addLog(entry);
-    task.currentStep += 1;
-    task.status = 'running';
-    Storage.updateTask(task);
-    await runTask(task.id);
-  } catch (e: any) {
-    const entry = {
-      time: new Date().toISOString(),
-      taskId: task.id,
-      stepIndex: idx,
-      tool: step.tool,
-      input: step.params,
-      error: String(e?.message ?? e),
-      status: 'error',
-    } as const;
-    task.logs.push(entry);
-    Storage.addLog(entry);
-    task.status = 'failed';
-    Storage.updateTask(task);
-  }
-  return task;
+  });
 }

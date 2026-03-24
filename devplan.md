@@ -57,12 +57,27 @@ Dokumen ini mencatat setiap langkah pengembangan yang dilakukan pada MyClaw seca
 - [x] Menambahkan edit draft sebelum approval (PATCH step current) + UI prompt edit untuk step send.
 - [x] Menambahkan reminders + follow-up: endpoint `/reminders` dan tombol follow-up dari inbox.
 - [x] Menambahkan policy mode `MYCLAW_MODE` (safe/read_only) dan allowlist `MYCLAW_ALLOWED_TOOLS`.
+- [x] Menambahkan redaction untuk audit log (mask token/secret) + retention data (`MYCLAW_RETENTION_DAYS`) + prune scheduler.
+- [x] Menambahkan export/delete data (admin token): `/data/export`, `/data/wipe`, `/data/prune`.
+- [x] Mengganti `webSearch` menjadi real search (DuckDuckGo HTML) dan menambahkan `webFetch` dengan sumber.
+- [x] Menambahkan tool `runCommand` (approval required) dengan allowlist command + cwd.
+- [x] Menambahkan knowledge base minimal: `/kb/docs` (POST/GET) dan `/kb/search`.
+- [x] Menambahkan output presentasi: `/presentations/outline` + UI tab Knowledge/Present.
+- [x] Menambahkan rate limiting sederhana untuk endpoint write + request id header (`x-request-id`).
+- [x] Menambahkan idempotency untuk eksekusi step (hindari eksekusi ganda saat retry/duplikasi request) + retry sederhana untuk web fetch/search.
+- [x] Menambahkan tool `gitSummary` (approval + allowlist) untuk ringkas status/diff workspace.
+- [x] Menambahkan manajemen AI model terpusat (Smart Switch): OpenRouter/SumoPod/Bytez + UI tab AI Models.
+- [x] Menambahkan input API key AI via UI (temporary, admin token) + status + test connection per provider.
+- [x] Perbaikan UI/UX: toast, modal, global search, tab Knowledge/Present/Guide, tabel lebih rapi dan responsif.
+- [x] Menambahkan Quick Workflows (klik → isi form → jalan) untuk use case umum (web/telegram/email/git/command).
+- [x] Menambahkan Goal Planner (Goal → generate plan → create task) + integrasi dari Inbox (Goal dari pesan).
 
 ### **Next Steps:**
-1. Menetapkan kanal prioritas untuk MVP (disarankan: Telegram + Email).
-2. Mengaktifkan bot Telegram real: set `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_POLLING=true`.
-3. Menambahkan allowlist chatId (opsional) untuk keamanan: `TELEGRAM_ALLOWLIST_CHAT_IDS`.
-4. Memulai email connector (IMAP/provider API) untuk workflow inbox.
-5. Mengaktifkan email polling real: set `EMAIL_POLLING=true` + `EMAIL_IMAP_*`.
-6. Menyiapkan SMTP untuk kirim email (opsional): set `EMAIL_SMTP_*` dan uji sendEmail dengan approval.
-7. Menambahkan preview isi pesan (full thread/context) dan ringkasan/action items di inbox.
+1. Menuntaskan “AI core”: gunakan model terpilih untuk planning & summarization (fallback heuristik jika API gagal).
+2. Unified inbox v1: contact mapping lintas channel (telegram/email) + thread view per contact.
+3. Database connector v1 (Postgres read-only): allowlist schema/table + UI query runner + preview.
+4. Idempotency key untuk aksi kirim (sendTelegram/sendEmail) agar aman terhadap retry/double-approve.
+5. Web cache per topik + TTL untuk mengurangi biaya dan mempercepat ringkasan.
+6. Storage persisten (Postgres) untuk tasks/logs/inbox/reminders/knowledge + migrasi dari in-memory.
+7. WhatsApp connector (WAHA/SumoPod) untuk ingest + send (approval) setelah policy & anti-spam siap.
+8. Hardening: queue untuk async jobs + scheduler polling yang lebih rapi + observability (metrics).

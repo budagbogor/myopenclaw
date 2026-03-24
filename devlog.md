@@ -4,8 +4,8 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 
 ## **Fase 0: Pivot & Re-Alignment**
 **Tujuan:** Menetapkan ulang arah produk dari prototipe game engine menjadi agentic AI yang aman dan bisa diaudit.
-- [ ] Finalisasi scope MVP (channel prioritas, batasan aksi, approval).
-- [ ] Menetapkan kebijakan data (retention, redaction, export/delete).
+- [x] Finalisasi scope MVP (channel prioritas, batasan aksi, approval).
+- [x] Menetapkan kebijakan data (retention, redaction, export/delete).
 - [x] Menetapkan kebijakan keamanan (allowlist tools, read-only default).
 
 ## **Fase 1: Foundation (MVP)**
@@ -34,13 +34,14 @@ Dokumen ini merinci fase-fase pengembangan MyClaw sebagai agentic AI untuk memba
 
 ## **Fase 4: Web Research, Knowledge, & Office Work**
 **Tujuan:** Agent dapat mencari info, merangkum dengan sumber, dan menghasilkan materi kerja.
-- [ ] Web search + fetch + ringkasan dengan daftar sumber.
-- [ ] Knowledge base opsional (ingest dokumen + pencarian).
-- [ ] Output untuk presentasi: outline slide dan poin-poin.
+- [x] Web search + fetch + ringkasan dengan daftar sumber.
+- [x] Knowledge base opsional (ingest dokumen + pencarian).
+- [x] Output untuk presentasi: outline slide dan poin-poin.
 
 ## **Fase 5: Developer Productivity & Hardening**
 **Tujuan:** Tools developer dan ketahanan sistem untuk penggunaan harian.
-- [ ] Tool “run commands” dengan allowlist per proyek (lint/test/build).
-- [ ] Workflow coding: generate perubahan + ringkas diff + catatan PR.
-- [ ] Rate limiting, retry policy, dan idempotency untuk aksi kirim.
-- [ ] Monitoring/observability yang lebih lengkap.
+- [x] Tool “run commands” dengan allowlist per proyek (lint/test/build).
+- [x] Workflow coding: ringkas status/diff via `gitSummary` + allowlist command.
+- [x] Rate limiting untuk endpoint write.
+- [x] Retry policy (untuk read tools) dan idempotency (untuk eksekusi step).
+- [x] Monitoring/observability minimal (request id).

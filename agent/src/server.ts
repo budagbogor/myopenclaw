@@ -13,11 +13,23 @@ import { emailImapStatus, startEmailPolling } from './connectors/email_imap.js';
 import { emailSmtpStatus } from './connectors/email_smtp.js';
 import { extractActionItems, summarizeText } from './summarize.js';
 import { v4 as uuidv4 } from 'uuid';
+import { makePresentationOutline } from './presentation.js';
+import { rateLimit } from './rate_limit.js';
+import { listAllModels, getSelectedModel, smartSwitch, selectModel } from './ai/registry.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+
+app.use((req, res, next) => {
+  const requestId = uuidv4();
+  res.setHeader('x-request-id', requestId);
+  (req as any).requestId = requestId;
+  next();
+});
+
+const writeLimiter = rateLimit({ windowMs: 60_000, max: 60 });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +50,32 @@ app.get('/tools', (_req, res) => {
   res.json({ mode: Config.mode, tools });
 });
 
+app.get('/ai/models', async (_req, res) => {
+  const models = await listAllModels();
+  res.json({ provider: Config.ai.provider, models });
+});
+
+app.get('/ai/status', async (_req, res) => {
+  const cur = getSelectedModel();
+  res.json(cur);
+});
+
+const SelectSchema = z.object({
+  provider: z.enum(['auto', 'openrouter', 'sumopod', 'bytez']),
+  modelId: z.string().optional(),
+});
+
+app.post('/ai/select', writeLimiter, async (req, res) => {
+  const parsed = SelectSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const cur = await selectModel(parsed.data.provider, parsed.data.modelId);
+  res.json(cur);
+});
+
+app.post('/ai/smart-switch', writeLimiter, async (_req, res) => {
+  const cur = await smartSwitch();
+  res.json(cur);
+});
 const TaskSchema = z.object({
   title: z.string().min(3),
   steps: z.array(
@@ -49,7 +87,7 @@ const TaskSchema = z.object({
   ).min(1),
 });
 
-app.post('/tasks', async (req, res) => {
+app.post('/tasks', writeLimiter, async (req, res) => {
   const parsed = TaskSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
@@ -68,7 +106,7 @@ app.get('/tasks/:id', (req, res) => {
   res.json(task);
 });
 
-app.post('/approvals/:id', async (req, res) => {
+app.post('/approvals/:id', writeLimiter, async (req, res) => {
   const task = await approveAndContinue(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
@@ -106,6 +144,30 @@ app.get('/logs', (_req, res) => {
   res.json({ logs: Storage.listLogs() });
 });
 
+function isAdmin(req: express.Request): boolean {
+  const token = Config.adminToken;
+  if (!token) return false;
+  const provided = req.header('x-myclaw-admin-token');
+  return provided === token;
+}
+
+app.get('/data/export', (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  res.json(Storage.exportData());
+});
+
+app.post('/data/wipe', writeLimiter, (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  Storage.wipeAll();
+  res.json({ ok: true });
+});
+
+app.post('/data/prune', writeLimiter, (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin token required' });
+  Storage.prune();
+  res.json({ ok: true, retentionDays: Config.retentionDays });
+});
+
 const ReminderCreateSchema = z.object({
   title: z.string().min(3),
   note: z.string().optional(),
@@ -118,7 +180,7 @@ app.get('/reminders', (req, res) => {
   res.json({ reminders: Storage.listReminders({ status, limit }) });
 });
 
-app.post('/reminders', (req, res) => {
+app.post('/reminders', writeLimiter, (req, res) => {
   const parsed = ReminderCreateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -134,11 +196,58 @@ app.post('/reminders', (req, res) => {
   res.status(201).json(reminder);
 });
 
-app.post('/reminders/:id/done', (req, res) => {
+app.post('/reminders/:id/done', writeLimiter, (req, res) => {
   const r = Storage.getReminder(req.params.id);
   if (!r) return res.status(404).json({ error: 'Reminder not found' });
   Storage.updateReminder(r.id, { status: 'done' });
   res.json(Storage.getReminder(r.id));
+});
+
+const KnowledgeDocSchema = z.object({
+  title: z.string().min(3),
+  text: z.string().min(1),
+  tags: z.array(z.string()).optional(),
+  sources: z.array(z.string()).optional(),
+});
+
+app.get('/kb/docs', (req, res) => {
+  const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 100;
+  res.json({ docs: Storage.listKnowledgeDocs(Number.isFinite(limit) ? limit : 100) });
+});
+
+app.post('/kb/docs', writeLimiter, (req, res) => {
+  const parsed = KnowledgeDocSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const doc = {
+    id: uuidv4(),
+    createdAt: new Date().toISOString(),
+    title: parsed.data.title,
+    text: parsed.data.text,
+    tags: parsed.data.tags,
+    sources: parsed.data.sources,
+  };
+  Storage.addKnowledgeDoc(doc);
+  res.status(201).json(doc);
+});
+
+app.get('/kb/search', (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : 20;
+  const docs = Storage.searchKnowledge(q, Number.isFinite(limit) ? limit : 20);
+  res.json({ q, docs });
+});
+
+const PresentationSchema = z.object({
+  title: z.string().min(3),
+  contextText: z.string().optional(),
+  sources: z.array(z.string()).optional(),
+});
+
+app.post('/presentations/outline', writeLimiter, (req, res) => {
+  const parsed = PresentationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  res.json(makePresentationOutline(parsed.data));
 });
 
 app.get('/inbox/messages', (req, res) => {
@@ -189,7 +298,7 @@ function buildReplyDraft(message: { channel: string; fromName?: string; fromId?:
   return { channel: 'email' as const, to: message.fromId ?? '', subject, text: body };
 }
 
-app.post('/inbox/messages/:id/reply-task', async (req, res) => {
+app.post('/inbox/messages/:id/reply-task', writeLimiter, async (req, res) => {
   const msg = Storage.getInboxMessage(req.params.id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
@@ -211,7 +320,7 @@ app.post('/inbox/messages/:id/reply-task', async (req, res) => {
   return res.status(201).json({ task, draft });
 });
 
-app.post('/inbox/messages/:id/followup', (req, res) => {
+app.post('/inbox/messages/:id/followup', writeLimiter, (req, res) => {
   const msg = Storage.getInboxMessage(req.params.id);
   if (!msg) return res.status(404).json({ error: 'Message not found' });
 
@@ -274,6 +383,9 @@ app.get('/connectors/email/smtp/status', async (_req, res) => {
     res.status(500).json({ enabled: false, error: String(e?.message ?? e) });
   }
 });
+
+Storage.prune();
+setInterval(() => Storage.prune(), 60 * 60 * 1000);
 
 startTelegramPolling();
 startEmailPolling();

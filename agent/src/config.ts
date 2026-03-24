@@ -5,6 +5,14 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().optional(),
   MYCLAW_MODE: z.string().optional(),
   MYCLAW_ALLOWED_TOOLS: z.string().optional(),
+  MYCLAW_RETENTION_DAYS: z.coerce.number().optional(),
+  MYCLAW_ADMIN_TOKEN: z.string().optional(),
+  MYCLAW_ALLOWED_COMMANDS: z.string().optional(),
+  MYCLAW_ALLOWED_CWDS: z.string().optional(),
+  AI_PROVIDER: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  SUMOPOD_API_KEY: z.string().optional(),
+  BYTEZ_API_KEY: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(10).optional(),
   TELEGRAM_POLLING: z
     .string()
@@ -53,6 +61,16 @@ export const Config = {
   port: env.PORT ?? 3100,
   mode: (env.MYCLAW_MODE ?? 'safe') as 'safe' | 'read_only',
   allowedTools: parseAllowlist(env.MYCLAW_ALLOWED_TOOLS),
+  retentionDays: env.MYCLAW_RETENTION_DAYS ?? 14,
+  adminToken: env.MYCLAW_ADMIN_TOKEN,
+  allowedCommands: parseAllowlist(env.MYCLAW_ALLOWED_COMMANDS),
+  allowedCwds: parseAllowlist(env.MYCLAW_ALLOWED_CWDS),
+  ai: {
+    provider: (env.AI_PROVIDER ?? 'auto') as 'auto' | 'openrouter' | 'sumopod' | 'bytez',
+    openrouter: { apiKey: env.OPENROUTER_API_KEY },
+    sumopod: { apiKey: env.SUMOPOD_API_KEY },
+    bytez: { apiKey: env.BYTEZ_API_KEY },
+  },
   telegram: {
     botToken: env.TELEGRAM_BOT_TOKEN,
     pollingEnabled: env.TELEGRAM_POLLING ?? false,

@@ -61,6 +61,27 @@ export interface Reminder {
   };
 }
 
+export interface KnowledgeDoc {
+  id: string;
+  createdAt: string;
+  title: string;
+  text: string;
+  tags?: string[];
+  sources?: string[];
+}
+
+export interface PresentationSlide {
+  title: string;
+  bullets: string[];
+}
+
+export interface PresentationOutline {
+  title: string;
+  createdAt: string;
+  slides: PresentationSlide[];
+  sources?: string[];
+}
+
 export type ToolEffect = 'read' | 'write';
 
 export interface Tool {
@@ -69,4 +90,18 @@ export interface Tool {
   effect: ToolEffect;
   approvalRequired?: (params: Record<string, unknown>) => boolean;
   run: (params: Record<string, unknown>) => Promise<unknown>;
+}
+
+export type AIProvider = 'auto' | 'openrouter' | 'sumopod' | 'bytez';
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  priceUsdPer1kTokens?: number;
+  latencyMsEstimate?: number;
+  quality?: 'coding' | 'general' | 'unknown';
+  freeTier?: boolean;
+  load?: 'low' | 'medium' | 'high' | 'unknown';
+  disabled?: boolean;
 }

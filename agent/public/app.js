@@ -1,9 +1,9 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
-const views = ['tasks', 'approvals', 'inbox', 'reminders', 'knowledge', 'present', 'guide', 'logs', 'tools'];
+const views = ['tasks', 'approvals', 'inbox', 'reminders', 'knowledge', 'present', 'ai', 'guide', 'logs', 'tools'];
 let currentView = 'tasks';
-let lastState = { tasks: [], logs: [], inbox: [], reminders: [], tools: [], mode: 'safe', knowledgeDocs: [], kbSearch: [], present: null };
+let lastState = { tasks: [], logs: [], inbox: [], reminders: [], tools: [], mode: 'safe', knowledgeDocs: [], kbSearch: [], present: null, ai: { provider: 'auto', models: [] }, aiStatus: { provider: 'auto' } };
 let globalSearch = '';
 let lastRefreshAt = null;
 
@@ -1006,6 +1006,7 @@ function render() {
   if (currentView === 'reminders') return renderReminders();
   if (currentView === 'knowledge') return renderKnowledge();
   if (currentView === 'present') return renderPresent();
+  if (currentView === 'ai') return renderAI();
   if (currentView === 'guide') return renderGuide();
   if (currentView === 'logs') return renderLogs();
   if (currentView === 'tools') return renderTools();
@@ -1051,6 +1052,13 @@ async function refreshTools() {
   lastState.mode = data.mode ?? 'safe';
 }
 
+async function refreshAI() {
+  const data = await api('/ai/models');
+  lastState.ai = data;
+  const status = await api('/ai/status');
+  lastState.aiStatus = status;
+}
+
 async function refresh() {
   await Promise.all([
     refreshHealth(),
@@ -1059,6 +1067,7 @@ async function refresh() {
     refreshInbox(),
     refreshReminders(),
     refreshKnowledge(),
+    refreshAI(),
     refreshTools(),
   ]);
   lastRefreshAt = new Date();

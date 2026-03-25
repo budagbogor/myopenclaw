@@ -15,7 +15,7 @@ import { extractActionItems, summarizeText } from './summarize.js';
 import { v4 as uuidv4 } from 'uuid';
 import { makePresentationOutline } from './presentation.js';
 import { rateLimit } from './rate_limit.js';
-import { listAllModels, getSelectedModel, smartSwitch, selectModel, getApiKeysStatus, setApiKeys, testProvider } from './ai/registry.js';
+import { listAllModels, getSelectedModel, smartSwitch, selectModel, getApiKeysStatus, setApiKeys, testProvider, clearModelCache } from './ai/registry.js';
 import { buildPlan, plannerExamples } from './planner.js';
 
 const app = express();
@@ -52,7 +52,27 @@ app.get('/tools', (_req, res) => {
 });
 
 app.get('/ai/models', async (_req, res) => {
-  const models = await listAllModels();
+  const provider =
+    _req.query.provider === 'openrouter'
+      ? 'openrouter'
+      : _req.query.provider === 'sumopod'
+        ? 'sumopod'
+        : _req.query.provider === 'bytez'
+          ? 'bytez'
+          : _req.query.provider === 'auto'
+            ? 'auto'
+            : undefined;
+  const q = typeof _req.query.q === 'string' ? _req.query.q.trim().toLowerCase() : '';
+  const limit = typeof _req.query.limit === 'string' ? Number(_req.query.limit) : undefined;
+
+  const all = await listAllModels();
+  let models = provider ? all.filter((m) => m.provider === provider) : all;
+  if (q) {
+    models = models.filter((m) => `${m.id} ${m.name}`.toLowerCase().includes(q));
+  }
+  if (Number.isFinite(limit ?? NaN)) {
+    models = models.slice(0, Math.max(1, Math.min(500, Number(limit))));
+  }
   res.json({ provider: Config.ai.provider, models });
 });
 
@@ -76,6 +96,7 @@ app.post('/ai/keys', writeLimiter, async (req, res) => {
   const parsed = KeysSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   setApiKeys(parsed.data);
+  clearModelCache();
   res.json(getApiKeysStatus());
 });
 

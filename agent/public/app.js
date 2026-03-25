@@ -16,6 +16,7 @@ let lastState = {
   ai: { provider: 'auto', models: [] },
   aiStatus: { provider: 'auto' },
   aiKeys: { openrouter: false, sumopod: false, bytez: false, source: { openrouter: 'none', sumopod: 'none', bytez: 'none' } },
+  aiDraftProvider: 'auto',
 };
 let globalSearch = '';
 let lastRefreshAt = null;
@@ -1348,6 +1349,38 @@ function renderAI() {
   const curModel = lastState.aiStatus?.model?.name ?? '';
   const keys = lastState.aiKeys ?? {};
 
+  if (!lastState.aiDraftProvider) lastState.aiDraftProvider = curProvider;
+  const draftProvider = lastState.aiDraftProvider ?? curProvider;
+
+  const providerModels =
+    draftProvider === 'openrouter'
+      ? all.filter((m) => m.provider === 'openrouter')
+      : draftProvider === 'sumopod'
+        ? all.filter((m) => m.provider === 'sumopod')
+        : draftProvider === 'bytez'
+          ? all.filter((m) => m.provider === 'bytez')
+          : [];
+
+  const preferred = providerModels
+    .slice()
+    .sort((a, b) => {
+      const af = a.freeTier ? 0 : 1;
+      const bf = b.freeTier ? 0 : 1;
+      if (af !== bf) return af - bf;
+      const aq = a.quality === 'coding' ? 0 : 1;
+      const bq = b.quality === 'coding' ? 0 : 1;
+      if (aq !== bq) return aq - bq;
+      return String(a.name).localeCompare(String(b.name));
+    })
+    .slice(0, 250);
+
+  const currentModelId = lastState.aiStatus?.model?.id ?? '';
+  const currentModelProvider = lastState.aiStatus?.model?.provider ?? curProvider;
+  if (currentModelId && currentModelProvider === draftProvider && !preferred.some((m) => m.id === currentModelId)) {
+    const found = providerModels.find((m) => m.id === currentModelId);
+    if (found) preferred.unshift(found);
+  }
+
   const rows = models
     .map((m) => {
       return `
@@ -1387,8 +1420,23 @@ function renderAI() {
             <option value="sumopod">SumoPod</option>
             <option value="bytez">Bytez</option>
           </select>
-          <div class="row" style="justify-content:flex-start">
+          <div class="meta">Model (provider aktif)</div>
+          <select id="ai-model" class="input" ${draftProvider === 'auto' ? 'disabled' : ''}>
+            ${draftProvider === 'auto' ? '<option value="">(Auto memilih)</option>' : '<option value="">(Pilih model…)</option>'}
+            ${preferred
+              .map((m) => {
+                const tag = `${m.freeTier ? 'free' : ''}${m.quality === 'coding' ? (m.freeTier ? ' • coding' : 'coding') : ''}`.trim();
+                const label = tag ? `${m.name} • ${tag}` : m.name;
+                return `<option value="${escapeHtml(m.id)}">${escapeHtml(label)}</option>`;
+              })
+              .join('')}
+          </select>
+          <div class="row" style="justify-content:flex-start; flex-wrap:wrap">
             <button id="ai-set-provider" class="btn">Set Provider</button>
+            <button id="ai-set-model" class="btn btn--ghost" ${draftProvider === 'auto' ? 'disabled' : ''}>Set Model</button>
+          </div>
+          <div class="row" style="justify-content:flex-start">
+            <span class="hint">Model list dibatasi 250 opsi teratas (free/coding diprioritaskan).</span>
           </div>
           <div class="hint">Provider bisa di-set dari UI. API key bisa via .env atau via UI (sementara, butuh admin token).</div>
         </div>
@@ -1461,7 +1509,13 @@ function renderAI() {
     </div>
   `;
 
-  $('#ai-provider').value = curProvider;
+  $('#ai-provider').value = draftProvider;
+  if ($('#ai-model') && currentModelId) $('#ai-model').value = currentModelId;
+
+  $('#ai-provider').addEventListener('change', () => {
+    lastState.aiDraftProvider = $('#ai-provider').value;
+    render();
+  });
 
   $('#ai-refresh').addEventListener('click', async () => {
     await refreshAI();
@@ -1489,7 +1543,26 @@ function renderAI() {
         body: JSON.stringify({ provider }),
       });
       lastState.aiStatus = cur;
+      lastState.aiDraftProvider = provider;
       toast('Provider set', provider, 'ok');
+      render();
+    } catch (e) {
+      toast('Failed', String(e.message ?? e), 'bad');
+    }
+  });
+
+  $('#ai-set-model')?.addEventListener('click', async () => {
+    const provider = $('#ai-provider').value;
+    const modelId = $('#ai-model')?.value ?? '';
+    if (!modelId) return toast('Missing', 'Pilih model dulu', 'bad');
+    try {
+      const cur = await api('/ai/select', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider, modelId }),
+      });
+      lastState.aiStatus = cur;
+      toast('Model set', cur.model?.name ?? modelId, 'ok');
       render();
     } catch (e) {
       toast('Failed', String(e.message ?? e), 'bad');
@@ -1827,8 +1900,12 @@ async function refreshTools() {
 }
 
 async function refreshAI() {
-  const data = await api('/ai/models');
-  lastState.ai = data;
+  const [openrouter, sumopod, bytez] = await Promise.all([
+    api('/ai/models?provider=openrouter&limit=500').catch(() => ({ models: [] })),
+    api('/ai/models?provider=sumopod&limit=500').catch(() => ({ models: [] })),
+    api('/ai/models?provider=bytez&limit=500').catch(() => ({ models: [] })),
+  ]);
+  lastState.ai = { provider: 'auto', models: [...(openrouter.models ?? []), ...(sumopod.models ?? []), ...(bytez.models ?? [])] };
   const status = await api('/ai/status');
   lastState.aiStatus = status;
   const keys = await api('/ai/keys/status').catch(() => undefined);

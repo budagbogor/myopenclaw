@@ -7,6 +7,9 @@ function hasKey(v?: string): v is string {
 
 let overrideKeys: { openrouter?: string; sumopod?: string; bytez?: string } = {};
 
+const MODEL_CACHE_TTL_MS = 10 * 60 * 1000;
+const modelCache: Partial<Record<AIProvider, { fetchedAt: number; models: AIModel[] }>> = {};
+
 export function setApiKeys(patch: { openrouter?: string; sumopod?: string; bytez?: string }) {
   overrideKeys = {
     openrouter: patch.openrouter ?? overrideKeys.openrouter,
@@ -38,6 +41,14 @@ export function getApiKeysStatus(): {
   };
 }
 
+export function clearModelCache(provider?: AIProvider) {
+  if (provider) {
+    delete modelCache[provider];
+    return;
+  }
+  for (const k of Object.keys(modelCache) as AIProvider[]) delete modelCache[k];
+}
+
 async function tryFetch(url: string, headers: Record<string, string>, timeoutMs = 8000): Promise<any | undefined> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -62,64 +73,124 @@ async function tryFetchAny(urls: string[], headers: Record<string, string>, time
 }
 
 export async function listOpenRouterModels(): Promise<AIModel[]> {
+  const cached = modelCache.openrouter;
+  if (cached && Date.now() - cached.fetchedAt < MODEL_CACHE_TTL_MS) return cached.models;
+
   const apiKey = overrideKeys.openrouter ?? Config.ai.openrouter.apiKey;
   if (!hasKey(apiKey)) {
-    return [
+    const models: AIModel[] = [
       { id: 'openrouter/free-coder', name: 'Free Coder', provider: 'openrouter', priceUsdPer1kTokens: 0, latencyMsEstimate: 800, quality: 'coding', freeTier: true, load: 'medium' },
     ];
+    modelCache.openrouter = { fetchedAt: Date.now(), models };
+    return models;
   }
-  const data = await tryFetch('https://api.openrouter.ai/v1/models', { Authorization: `Bearer ${apiKey}` });
+
+  const data = await tryFetchAny(
+    ['https://openrouter.ai/api/v1/models', 'https://api.openrouter.ai/v1/models'],
+    { Authorization: `Bearer ${apiKey}` },
+    12000
+  );
   if (!data || !Array.isArray(data.data)) {
-    return [{ id: 'openrouter/fallback', name: 'Fallback', provider: 'openrouter', priceUsdPer1kTokens: 0.001, latencyMsEstimate: 1200, quality: 'general', freeTier: false, load: 'unknown' }];
+    const models: AIModel[] = [{ id: 'openrouter/fallback', name: 'Fallback', provider: 'openrouter', priceUsdPer1kTokens: 0.001, latencyMsEstimate: 1200, quality: 'general', freeTier: false, load: 'unknown' }];
+    modelCache.openrouter = { fetchedAt: Date.now(), models };
+    return models;
   }
+
   const models: AIModel[] = [];
   for (const m of data.data) {
     const id = String(m.id ?? m.slug ?? m.name ?? 'unknown');
     const name = String(m.name ?? id);
-    const freeTier = Boolean(m.tier === 'free' || String(m.tier ?? '').toLowerCase().includes('free'));
-    const price = typeof m.price === 'number' ? m.price : undefined;
+    const pricing = m.pricing ?? {};
+    const prompt = typeof pricing.prompt === 'number' ? pricing.prompt : Number(pricing.prompt ?? NaN);
+    const completion = typeof pricing.completion === 'number' ? pricing.completion : Number(pricing.completion ?? NaN);
+    const freeTier = Boolean(m.tier === 'free' || String(m.tier ?? '').toLowerCase().includes('free') || (Number.isFinite(prompt) && Number.isFinite(completion) && prompt === 0 && completion === 0));
+    const priceUsdPer1kTokens = Number.isFinite(prompt) ? prompt : undefined;
     const quality = /code|coder|coding|dev/i.test(name) ? 'coding' : 'general';
-    models.push({ id, name, provider: 'openrouter', priceUsdPer1kTokens: price, latencyMsEstimate: undefined, quality, freeTier, load: 'unknown' });
+    models.push({ id, name, provider: 'openrouter', priceUsdPer1kTokens, latencyMsEstimate: undefined, quality, freeTier, load: 'unknown' });
   }
+
+  modelCache.openrouter = { fetchedAt: Date.now(), models };
   return models;
 }
 
 export async function listSumoPodModels(): Promise<AIModel[]> {
+  const cached = modelCache.sumopod;
+  if (cached && Date.now() - cached.fetchedAt < MODEL_CACHE_TTL_MS) return cached.models;
+
   const apiKey = overrideKeys.sumopod ?? Config.ai.sumopod.apiKey;
   if (!hasKey(apiKey)) {
-    return [
+    const models: AIModel[] = [
       { id: 'sumopod/free-coding-lite', name: 'SumoPod Free Coding Lite', provider: 'sumopod', priceUsdPer1kTokens: 0, latencyMsEstimate: 900, quality: 'coding', freeTier: true, load: 'low' },
       { id: 'sumopod/premium-coder', name: 'SumoPod Premium Coder', provider: 'sumopod', priceUsdPer1kTokens: 0.003, latencyMsEstimate: 700, quality: 'coding', freeTier: false, load: 'low' },
     ];
+    modelCache.sumopod = { fetchedAt: Date.now(), models };
+    return models;
   }
-  return [
-    { id: 'sumopod/auto-best-coder', name: 'SumoPod Auto Best Coder', provider: 'sumopod', priceUsdPer1kTokens: 0.002, latencyMsEstimate: 680, quality: 'coding', freeTier: false, load: 'low' },
-  ];
+
+  const data = await tryFetchAny(['https://ai.sumopod.com/v1/models', 'https://ai.sumopod.com/api/v1/models'], { Authorization: `Bearer ${apiKey}` }, 12000);
+  if (!data || !Array.isArray(data.data)) {
+    const models: AIModel[] = [{ id: 'sumopod/auto-best-coder', name: 'SumoPod Auto Best Coder', provider: 'sumopod', priceUsdPer1kTokens: 0.002, latencyMsEstimate: 680, quality: 'coding', freeTier: false, load: 'unknown' }];
+    modelCache.sumopod = { fetchedAt: Date.now(), models };
+    return models;
+  }
+
+  const models: AIModel[] = data.data.map((m: any) => {
+    const id = String(m.id ?? m.name ?? 'unknown');
+    const name = String(m.id ?? m.name ?? id);
+    const quality = /code|coder|coding|dev/i.test(name) ? 'coding' : 'general';
+    return { id, name, provider: 'sumopod', quality, freeTier: false, load: 'unknown' };
+  });
+  modelCache.sumopod = { fetchedAt: Date.now(), models };
+  return models;
 }
 
 export async function listBytezModels(): Promise<AIModel[]> {
+  const cached = modelCache.bytez;
+  if (cached && Date.now() - cached.fetchedAt < MODEL_CACHE_TTL_MS) return cached.models;
+
   const apiKey = overrideKeys.bytez ?? Config.ai.bytez.apiKey;
   if (!hasKey(apiKey)) {
-    return [
+    const models: AIModel[] = [
       { id: 'bytez/free-1', name: 'Bytez Free 1', provider: 'bytez', priceUsdPer1kTokens: 0, latencyMsEstimate: 850, quality: 'general', freeTier: true, load: 'medium' },
       { id: 'bytez/coder-pro', name: 'Bytez Coder Pro', provider: 'bytez', priceUsdPer1kTokens: 0.002, latencyMsEstimate: 700, quality: 'coding', freeTier: false, load: 'low' },
     ];
+    modelCache.bytez = { fetchedAt: Date.now(), models };
+    return models;
   }
+
   const key = apiKey;
-  const headers = { Authorization: `Bearer ${key}`, 'x-api-key': key };
-  const data = await tryFetchAny(['https://bytez.com/models', 'https://api.bytez.com/models'], headers);
-  if (!data || !Array.isArray(data)) {
-    return [{ id: 'bytez/fallback', name: 'Bytez Fallback', provider: 'bytez', priceUsdPer1kTokens: 0.0015, latencyMsEstimate: 1000, quality: 'general', freeTier: false, load: 'unknown' }];
+  const authHeaders = [{ Authorization: key }, { Authorization: `Bearer ${key}` }, { Authorization: `Key ${key}` }];
+  let data: any | undefined;
+  for (const headers of authHeaders) {
+    data = await tryFetchAny(
+      [
+        'https://api.bytez.com/models/v2/list/models?task=chat',
+        'https://api.bytez.com/models/v2/list/models',
+        'https://api.bytez.com/models',
+      ],
+      headers as Record<string, string>,
+      12000
+    );
+    if (data) break;
   }
-  const models: AIModel[] = [];
-  for (const m of data) {
-    const id = String(m.id ?? m.slug ?? m.name ?? 'unknown');
-    const name = String(m.name ?? id);
-    const price = typeof m.price === 'number' ? m.price : undefined;
-    const freeTier = price === 0;
+
+  const output = Array.isArray(data) ? data : Array.isArray(data?.output) ? data.output : Array.isArray(data?.data) ? data.data : undefined;
+  if (!output) {
+    const models: AIModel[] = [{ id: 'bytez/fallback', name: 'Bytez Fallback', provider: 'bytez', priceUsdPer1kTokens: 0.0015, latencyMsEstimate: 1000, quality: 'general', freeTier: false, load: 'unknown' }];
+    modelCache.bytez = { fetchedAt: Date.now(), models };
+    return models;
+  }
+
+  const models: AIModel[] = output.map((m: any) => {
+    const id = String(m.modelId ?? m.id ?? m.slug ?? m.name ?? 'unknown');
+    const name = String(m.modelId ?? m.name ?? id);
+    const meter = String(m.meter ?? '');
+    const freeTier = /free/i.test(meter) || Number(m.meterPrice ?? 1) === 0;
     const quality = /code|coder|coding|dev/i.test(name) ? 'coding' : 'general';
-    models.push({ id, name, provider: 'bytez', priceUsdPer1kTokens: price, latencyMsEstimate: undefined, quality, freeTier, load: 'unknown' });
-  }
+    return { id, name, provider: 'bytez', priceUsdPer1kTokens: undefined, latencyMsEstimate: undefined, quality, freeTier, load: 'unknown' };
+  });
+
+  modelCache.bytez = { fetchedAt: Date.now(), models };
   return models;
 }
 
@@ -145,7 +216,7 @@ export async function testProvider(provider: AIProvider): Promise<{
     const apiKey = overrideKeys.openrouter ?? Config.ai.openrouter.apiKey;
     const source = keys.source.openrouter;
     if (!hasKey(apiKey)) return { provider, ok: false, source, error: 'OPENROUTER_API_KEY belum di-set' };
-    const data = await tryFetch('https://api.openrouter.ai/v1/models', { Authorization: `Bearer ${apiKey}` }, 10000);
+    const data = await tryFetchAny(['https://openrouter.ai/api/v1/models', 'https://api.openrouter.ai/v1/models'], { Authorization: `Bearer ${apiKey}` }, 10000);
     if (!data || !Array.isArray(data.data)) return { provider, ok: false, source, error: 'Gagal fetch models dari OpenRouter' };
     const sample = data.data.slice(0, 5).map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? m.id ?? '') }));
     return { provider, ok: true, source, modelCount: data.data.length, sampleModels: sample };
@@ -155,25 +226,49 @@ export async function testProvider(provider: AIProvider): Promise<{
     const apiKey = overrideKeys.bytez ?? Config.ai.bytez.apiKey;
     const source = keys.source.bytez;
     if (!hasKey(apiKey)) return { provider, ok: false, source, error: 'BYTEZ_API_KEY belum di-set' };
-    const headers = { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey };
-    const data = await tryFetchAny(['https://bytez.com/models', 'https://api.bytez.com/models'], headers, 10000);
-    if (!data || !Array.isArray(data)) return { provider, ok: false, source, error: 'Gagal fetch models dari Bytez' };
-    const sample = data.slice(0, 5).map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? m.id ?? '') }));
-    return { provider, ok: true, source, modelCount: data.length, sampleModels: sample };
+    const authHeaders = [{ Authorization: apiKey }, { Authorization: `Bearer ${apiKey}` }, { Authorization: `Key ${apiKey}` }];
+    let data: any | undefined;
+    for (const headers of authHeaders) {
+      data = await tryFetchAny(
+        [
+          'https://api.bytez.com/models/v2/list/models?task=chat',
+          'https://api.bytez.com/models/v2/list/models',
+          'https://api.bytez.com/models',
+        ],
+        headers as Record<string, string>,
+        10000
+      );
+      if (data) break;
+    }
+    const out = Array.isArray(data) ? data : Array.isArray(data?.output) ? data.output : Array.isArray(data?.data) ? data.data : undefined;
+    if (!out) return { provider, ok: false, source, error: 'Gagal fetch models dari Bytez' };
+    const sample = out.slice(0, 5).map((m: any) => ({ id: String(m.modelId ?? m.id ?? ''), name: String(m.modelId ?? m.name ?? m.id ?? '') }));
+    return { provider, ok: true, source, modelCount: out.length, sampleModels: sample };
   }
 
   if (provider === 'sumopod') {
     const apiKey = overrideKeys.sumopod ?? Config.ai.sumopod.apiKey;
     const source = keys.source.sumopod;
     if (!hasKey(apiKey)) return { provider, ok: false, source, error: 'SUMOPOD_API_KEY belum di-set' };
-    const models = await listSumoPodModels();
+    const data = await tryFetchAny(['https://ai.sumopod.com/v1/models', 'https://ai.sumopod.com/api/v1/models'], { Authorization: `Bearer ${apiKey}` }, 10000);
+    if (!data || !Array.isArray(data.data)) {
+      const models = await listSumoPodModels();
+      return {
+        provider,
+        ok: true,
+        source,
+        modelCount: models.length,
+        sampleModels: models.slice(0, 5).map((m) => ({ id: m.id, name: m.name })),
+        note: 'SumoPod /v1/models belum bisa diakses dari environment ini; memakai fallback list.',
+      };
+    }
+    const models = data.data.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.id ?? m.name ?? '') }));
     return {
       provider,
       ok: true,
       source,
       modelCount: models.length,
-      sampleModels: models.slice(0, 5).map((m) => ({ id: m.id, name: m.name })),
-      note: 'SumoPod API test masih placeholder (belum ada endpoint verifikasi token).',
+      sampleModels: models.slice(0, 5),
     };
   }
 
